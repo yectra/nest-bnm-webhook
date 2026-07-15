@@ -7,17 +7,10 @@ import { TwilioService } from './twilio.service';
 @ApiTags('Twilio')
 @Controller('twilio')
 export class TwilioController {
-    constructor(
-        private readonly twilioService: TwilioService,
-    ) { }
+  constructor(private readonly twilioService: TwilioService) {}
 
-    @Post('send-message')
-    async sendMessage(
-        @Body() dto: SendMessageDto,
-    ) {
-        return this.twilioService.sendWhatsAppMessage(
-            dto.to,
-            dto.message,
-        );
-    }
+  @Post('send-message')
+  async sendMessage(@Body() dto: SendMessageDto) {
+    return this.twilioService.sendWhatsAppMessage(dto.to, dto.message);
+  }
 }

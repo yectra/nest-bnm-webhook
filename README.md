@@ -1,98 +1,118 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# BNM Webhook Backend
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+NestJS backend for:
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+- Twilio WhatsApp inbound webhook handling
+- Automatic WhatsApp replies
+- Outbound message sending
+- Twilio message status callbacks
+- Azure App Service deployment
 
-## Description
-
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Project setup
+## Local setup
 
 ```bash
-$ npm install
+npm install
+npm run build
+npm run start
 ```
 
-## Compile and run the project
+The API starts on `http://localhost:3000` by default.
+
+Useful endpoints:
+
+- `GET /api/health`
+- `POST /api/twilio/send-message`
+- `POST /api/webhook/whatsapp`
+- `POST /api/webhook/whatsapp/status`
+- `GET /docs`
+
+## Required environment variables
+
+Create a `.env` file with:
+
+```env
+PORT=3000
+NODE_ENV=development
+APP_BASE_URL=https://your-app-name.azurewebsites.net
+TWILIO_ACCOUNT_SID=your_account_sid
+TWILIO_AUTH_TOKEN=your_auth_token
+TWILIO_WHATSAPP_NUMBER=whatsapp:+14155238886
+TWILIO_STATUS_CALLBACK_URL=https://your-app-name.azurewebsites.net/api/webhook/whatsapp/status
+TWILIO_WEBHOOK_SECRET=optional_shared_secret
+```
+
+Notes:
+
+- `APP_BASE_URL` should be your public Azure App Service URL.
+- `TWILIO_STATUS_CALLBACK_URL` is used when this app sends outbound WhatsApp messages.
+- `TWILIO_WEBHOOK_SECRET` is optional. Real Twilio requests are validated with the Twilio auth token.
+
+## Twilio WhatsApp configuration
+
+In the Twilio console for your WhatsApp sender:
+
+1. Set the incoming message webhook URL to:
+
+```text
+https://your-app-name.azurewebsites.net/api/webhook/whatsapp
+```
+
+2. Set the method to `POST`.
+
+3. For status callbacks, use:
+
+```text
+https://your-app-name.azurewebsites.net/api/webhook/whatsapp/status
+```
+
+## Azure App Service deployment
+
+### 1. Create the App Service resources
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+az group create --name bnm-webhook-rg --location centralindia
+az appservice plan create --name bnm-webhook-plan --resource-group bnm-webhook-rg --sku B1 --is-linux
+az webapp create --name <your-unique-app-name> --resource-group bnm-webhook-rg --plan bnm-webhook-plan --runtime "NODE:22-lts"
 ```
 
-## Run tests
+### 2. Configure app settings
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+az webapp config appsettings set \
+  --name <your-unique-app-name> \
+  --resource-group bnm-webhook-rg \
+  --settings \
+  NODE_ENV=production \
+  SCM_DO_BUILD_DURING_DEPLOYMENT=true \
+  PORT=8080 \
+  APP_BASE_URL=https://<your-unique-app-name>.azurewebsites.net \
+  TWILIO_ACCOUNT_SID=<value> \
+  TWILIO_AUTH_TOKEN=<value> \
+  TWILIO_WHATSAPP_NUMBER=whatsapp:+14155238886 \
+  TWILIO_STATUS_CALLBACK_URL=https://<your-unique-app-name>.azurewebsites.net/api/webhook/whatsapp/status
 ```
 
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+### 3. Deploy the code
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+az webapp deployment source config-local-git \
+  --name <your-unique-app-name> \
+  --resource-group bnm-webhook-rg
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+Then push your repo to the Git remote returned by Azure, or use a ZIP deployment:
 
-## Resources
+```bash
+az webapp deploy \
+  --name <your-unique-app-name> \
+  --resource-group bnm-webhook-rg \
+  --src-path .
+```
 
-Check out a few resources that may come in handy when working with NestJS:
+## Runtime behavior
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+- Inbound WhatsApp messages hit `/api/webhook/whatsapp`.
+- The app validates the Twilio request signature.
+- It responds immediately with TwiML, so Twilio sends the auto-reply back to the user.
+- Outbound messages sent through `/api/twilio/send-message` include the configured status callback URL.
+- Twilio delivery updates are received on `/api/webhook/whatsapp/status`.

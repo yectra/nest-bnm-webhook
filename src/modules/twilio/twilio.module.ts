@@ -8,4 +8,4 @@ import { TwilioService } from './twilio.service';
   providers: [TwilioService],
   exports: [TwilioService],
 })
-export class TwilioModule { }
+export class TwilioModule {}

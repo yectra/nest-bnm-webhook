@@ -1,16 +1,19 @@
+/* eslint-disable prettier/prettier */
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import {
-  DocumentBuilder,
-  SwaggerModule,
-} from '@nestjs/swagger';
+import type { Express } from 'express';
+import { urlencoded } from 'express';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  const expressApp = app.getHttpAdapter().getInstance() as Express;
 
+  expressApp.set('trust proxy', 1);
   app.setGlobalPrefix('api');
+  app.use(urlencoded({ extended: false }));
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -36,13 +39,9 @@ async function bootstrap() {
 
   await app.listen(process.env.PORT || 3000);
 
-  console.log(
-    `Server running on http://localhost:${process.env.PORT || 3000}`,
-  );
+  console.log(`Server running on http://localhost:${process.env.PORT || 3000}`);
 
-  console.log(
-    `Swagger http://localhost:${process.env.PORT || 3000}/docs`,
-  );
+  console.log(`Swagger http://localhost:${process.env.PORT || 3000}/docs`);
 }
 
-bootstrap();
+void bootstrap();
