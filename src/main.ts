@@ -1,4 +1,3 @@
-/* eslint-disable prettier/prettier */
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import type { Express } from 'express';
@@ -38,10 +37,6 @@ async function bootstrap() {
   SwaggerModule.setup('docs', app, document);
 
   await app.listen(process.env.PORT || 3000);
-
-  console.log(`Server running on http://localhost:${process.env.PORT || 3000}`);
-
-  console.log(`Swagger http://localhost:${process.env.PORT || 3000}/docs`);
 }
 
 void bootstrap();

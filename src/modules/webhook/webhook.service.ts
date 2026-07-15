@@ -50,9 +50,6 @@ export class WebhookService {
     }
 
     async receive(request: Request, body?: Record<string, string>) {
-        console.log('========== Incoming WhatsApp ==========');
-        console.log(JSON.stringify(body, null, 2));
-        console.log('=======================================');
         if (!body || Object.keys(body).length === 0) {
             throw new BadRequestException(
                 'Webhook payload is missing. Send x-www-form-urlencoded fields like Body, From, and ProfileName.',
@@ -80,24 +77,6 @@ export class WebhookService {
         return {
             xml: response.toString(),
         };
-
-        /*
-
-        await this.twilioService.sendWhatsAppMessage(
-            From,
-            `Hello ${ProfileName} 👋
-
-You said:
-
-"${Body}"
-
-This reply is coming from NestJS 🚀`,
-        );
-
-        return {
-            success: true,
-        };
-        */
     }
 
     handleStatusCallback(body: Record<string, string>) {
