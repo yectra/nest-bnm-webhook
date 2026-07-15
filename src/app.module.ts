@@ -2,15 +2,20 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import * as Joi from 'joi';
 
+import appConfig from './config/app.config';
+import twilioConfig from './config/twilio.config';
+import azureConfig from './config/azure.config';
+import databaseConfig from './config/database.config';
+
 import { HealthModule } from './modules/health/health.module';
-import { TwilioModule } from './modules/twilio/twilio.module';
-import { WebhookModule } from './modules/webhook/webhook.module';
+import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
+      load: [appConfig, twilioConfig, azureConfig, databaseConfig],
       validationSchema: Joi.object({
         NODE_ENV: Joi.string()
           .valid('development', 'test', 'production')
@@ -29,9 +34,7 @@ import { WebhookModule } from './modules/webhook/webhook.module';
 
     HealthModule,
 
-    TwilioModule,
-
-    WebhookModule,
+    WhatsappModule,
   ],
 })
 export class AppModule {}
