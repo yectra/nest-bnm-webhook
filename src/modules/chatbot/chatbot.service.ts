@@ -81,19 +81,32 @@ export class ChatbotService {
 
       // ──────────────────────────────────────────────
       // 5. Retrieve data from Cosmos DB using the plan
-      //    Authenticated users get their own scoped records.
-      //    Anonymous users get general (unscoped) results from the database.
+      //    Authenticated  → full access scoped to their userId
+      //    Anonymous      → Service, AskOurExpert, Category only
       // ──────────────────────────────────────────────
-      if (queryPlan.operation === 'SUMMARY') {
-        // Parallel fetch from all containers
-        knowledge = await this.retrievalService.getBusinessSummary(userId);
-      } else if (queryPlan.containers.length > 0) {
-        // Targeted fetch for specified containers with filters
-        knowledge = await this.retrievalService.fetchByContainers(
-          queryPlan.containers,
-          userId,
-          queryPlan.filters,
-        );
+      if (userId) {
+        // Authenticated user — full access
+        if (queryPlan.operation === 'SUMMARY') {
+          knowledge = await this.retrievalService.getBusinessSummary(userId);
+        } else if (queryPlan.containers.length > 0) {
+          knowledge = await this.retrievalService.fetchByContainers(
+            queryPlan.containers,
+            userId,
+            queryPlan.filters,
+          );
+        }
+      } else {
+        // Anonymous user — public containers only
+        if (queryPlan.operation === 'SUMMARY') {
+          knowledge = await this.retrievalService.getPublicSummary();
+        } else if (queryPlan.containers.length > 0) {
+          // fetchByContainers will silently skip private containers
+          knowledge = await this.retrievalService.fetchByContainers(
+            queryPlan.containers,
+            null,
+            queryPlan.filters,
+          );
+        }
       }
     } catch (error) {
       this.logger.error('Query planning or retrieval failed', error);

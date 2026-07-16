@@ -138,13 +138,14 @@ export class RetrievalService {
   // ContactUs
   // ──────────────────────────────────────────────
 
+  /**
+   * ContactUs — authenticated users only, scoped to their userId.
+   */
   async getContacts(
-    userId: string | null,
+    userId: string,
     filters: QueryPlanFilters = {},
   ): Promise<ContainerResult> {
-    const { sql, parameters } = userId
-      ? this.buildUserQuery('*', filters, userId)
-      : this.buildGeneralQuery('*', filters);
+    const { sql, parameters } = this.buildUserQuery('*', filters, userId);
     const records = await this.query('ContactUs', sql, parameters);
     return { container: 'ContactUs', records, count: records.length };
   }
@@ -153,15 +154,16 @@ export class RetrievalService {
   // Project
   // ──────────────────────────────────────────────
 
+  /**
+   * Project — authenticated users only, scoped to their userId.
+   */
   async getProjects(
-    userId: string | null,
+    userId: string,
     filters: QueryPlanFilters = {},
   ): Promise<ContainerResult> {
     const fields =
       'c.id, c.name, c.description, c.status, c.startDate, c.endDate, c.budget';
-    const { sql, parameters } = userId
-      ? this.buildUserQuery(fields, filters, userId)
-      : this.buildGeneralQuery(fields, filters);
+    const { sql, parameters } = this.buildUserQuery(fields, filters, userId);
     const records = await this.query('Project', sql, parameters);
     return { container: 'Project', records, count: records.length };
   }
@@ -170,14 +172,15 @@ export class RetrievalService {
   // Quote
   // ──────────────────────────────────────────────
 
+  /**
+   * Quote — authenticated users only, scoped to their userId.
+   */
   async getQuotes(
-    userId: string | null,
+    userId: string,
     filters: QueryPlanFilters = {},
   ): Promise<ContainerResult> {
     const fields = 'c.id, c.title, c.amount, c.status, c.createdAt, c.approvedAt';
-    const { sql, parameters } = userId
-      ? this.buildUserQuery(fields, filters, userId)
-      : this.buildGeneralQuery(fields, filters);
+    const { sql, parameters } = this.buildUserQuery(fields, filters, userId);
     const records = await this.query('Quote', sql, parameters);
     return { container: 'Quote', records, count: records.length };
   }
@@ -186,6 +189,10 @@ export class RetrievalService {
   // Service
   // ──────────────────────────────────────────────
 
+  /**
+   * Service — public. Anonymous users get all services; authenticated users
+   * get services scoped to their userId.
+   */
   async getServices(
     userId: string | null,
     filters: QueryPlanFilters = {},
@@ -202,15 +209,16 @@ export class RetrievalService {
   // Vendor
   // ──────────────────────────────────────────────
 
+  /**
+   * Vendor — authenticated users only, scoped to their userId.
+   */
   async getVendors(
-    userId: string | null,
+    userId: string,
     filters: QueryPlanFilters = {},
   ): Promise<ContainerResult> {
     const fields =
       'c.id, c.name, c.contactName, c.email, c.phone, c.status, c.category';
-    const { sql, parameters } = userId
-      ? this.buildUserQuery(fields, filters, userId)
-      : this.buildGeneralQuery(fields, filters);
+    const { sql, parameters } = this.buildUserQuery(fields, filters, userId);
     const records = await this.query('Vendor', sql, parameters);
     return { container: 'Vendor', records, count: records.length };
   }
@@ -219,6 +227,10 @@ export class RetrievalService {
   // AskOurExpert
   // ──────────────────────────────────────────────
 
+  /**
+   * AskOurExpert — public. Anonymous users get all experts; authenticated
+   * users get experts scoped to their userId.
+   */
   async getExperts(
     userId: string | null,
     filters: QueryPlanFilters = {},
@@ -238,7 +250,11 @@ export class RetrievalService {
    * Fetch high-level counts and recent records from all containers
    * simultaneously. Returns an aggregated view of the user's business.
    */
-  async getBusinessSummary(userId: string | null): Promise<ContainerResult[]> {
+  /**
+   * Full business summary — authenticated users only.
+   * Fetches from ALL containers scoped to the userId.
+   */
+  async getBusinessSummary(userId: string): Promise<ContainerResult[]> {
     const [contacts, projects, quotes, services, vendors, experts, categories] =
       await Promise.allSettled([
         this.getContacts(userId, {}),
@@ -274,12 +290,41 @@ export class RetrievalService {
     return results;
   }
 
+  /**
+   * Public summary — anonymous users only.
+   * Only fetches from Service, AskOurExpert, and Category.
+   */
+  async getPublicSummary(): Promise<ContainerResult[]> {
+    const [services, experts, categories] = await Promise.allSettled([
+      this.getServices(null, {}),
+      this.getExperts(null, {}),
+      this.getCategories({}),
+    ]);
+
+    const results: ContainerResult[] = [];
+
+    for (const result of [services, experts, categories]) {
+      if (result.status === 'fulfilled') {
+        results.push(result.value);
+      } else {
+        this.logger.warn(
+          'Public summary fetch failed for one container',
+          result.reason,
+        );
+      }
+    }
+
+    return results;
+  }
+
   // ──────────────────────────────────────────────
   // Targeted multi-container query by plan
   // ──────────────────────────────────────────────
 
   /**
    * Route a list of container names to their specific retrieval methods.
+   * Private containers (ContactUs, Project, Quote, Vendor) are silently
+   * skipped for anonymous users (userId = null).
    */
   async fetchByContainers(
     containerNames: string[],
@@ -309,19 +354,28 @@ export class RetrievalService {
     userId: string | null,
     filters: QueryPlanFilters,
   ): Promise<ContainerResult> {
+    // Private containers — require authentication
+    const privateContainers = ['ContactUs', 'Project', 'Quote', 'Vendor'];
+    if (!userId && privateContainers.includes(containerName)) {
+      this.logger.warn(
+        `Anonymous access denied for private container: ${containerName}`,
+      );
+      return { container: containerName, records: [], count: 0 };
+    }
+
     switch (containerName) {
       case 'Category':
         return this.getCategories(filters);
       case 'ContactUs':
-        return this.getContacts(userId, filters);
+        return this.getContacts(userId!, filters);
       case 'Project':
-        return this.getProjects(userId, filters);
+        return this.getProjects(userId!, filters);
       case 'Quote':
-        return this.getQuotes(userId, filters);
+        return this.getQuotes(userId!, filters);
       case 'Service':
         return this.getServices(userId, filters);
       case 'Vendor':
-        return this.getVendors(userId, filters);
+        return this.getVendors(userId!, filters);
       case 'AskOurExpert':
         return this.getExperts(userId, filters);
       default:
