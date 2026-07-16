@@ -84,7 +84,9 @@ export class JwtAuthGuard implements CanActivate {
     const parts = token.split('.');
 
     if (parts.length !== 3) {
-      throw new UnauthorizedException('Invalid JWT format: expected 3 segments');
+      throw new UnauthorizedException(
+        'Invalid JWT format: expected 3 segments',
+      );
     }
 
     const payloadBase64 = parts[1];
