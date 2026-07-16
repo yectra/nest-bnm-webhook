@@ -80,7 +80,9 @@ export class RetrievalService {
   /**
    * Get all categories (global, not user-scoped).
    */
-  async getCategories(filters: QueryPlanFilters = {}): Promise<ContainerResult> {
+  async getCategories(
+    filters: QueryPlanFilters = {},
+  ): Promise<ContainerResult> {
     let sql = 'SELECT c.id, c.name, c.description, c.displayOrder FROM c';
     const parameters: SqlParameter[] = [];
 
@@ -211,11 +213,22 @@ export class RetrievalService {
 
     const results: ContainerResult[] = [];
 
-    for (const result of [contacts, projects, quotes, services, vendors, experts, categories]) {
+    for (const result of [
+      contacts,
+      projects,
+      quotes,
+      services,
+      vendors,
+      experts,
+      categories,
+    ]) {
       if (result.status === 'fulfilled') {
         results.push(result.value);
       } else {
-        this.logger.warn('Summary fetch failed for one container', result.reason);
+        this.logger.warn(
+          'Summary fetch failed for one container',
+          result.reason,
+        );
       }
     }
 
@@ -278,4 +291,3 @@ export class RetrievalService {
     }
   }
 }
-

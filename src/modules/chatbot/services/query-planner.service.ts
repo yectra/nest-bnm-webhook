@@ -112,7 +112,14 @@ ${question}
 
       // Safe fallback — broad LIST across all user-owned containers
       return {
-        containers: ['Project', 'Quote', 'Service', 'Vendor', 'ContactUs', 'AskOurExpert'],
+        containers: [
+          'Project',
+          'Quote',
+          'Service',
+          'Vendor',
+          'ContactUs',
+          'AskOurExpert',
+        ],
         operation: 'LIST',
         filters: {},
         limit: 50,

@@ -1,18 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { AuthorizationResult } from 'src/common/interfaces/authorization-result.interface';
-import { KnowledgeDomain } from 'src/common/enums/knowledge-domain.enum';
+import { AuthorizationResult } from '../../../common/interfaces/authorization-result.interface';
+import { KnowledgeDomain } from '../../../common/enums/knowledge-domain.enum';
 
 @Injectable()
 export class AuthorizationService {
-  private readonly allowedDomains = [
-    KnowledgeDomain.SERVICE,
-    KnowledgeDomain.CATEGORY,
-    KnowledgeDomain.PROJECT,
-    KnowledgeDomain.FORM,
-    KnowledgeDomain.EXPERT,
-    KnowledgeDomain.GENERAL,
-  ];
-
   private readonly blockedKeywords = [
     'payment',
     'payments',
