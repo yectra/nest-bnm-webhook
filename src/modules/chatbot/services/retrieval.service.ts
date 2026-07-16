@@ -120,15 +120,13 @@ export class RetrievalService {
   async getCategories(
     filters: QueryPlanFilters = {},
   ): Promise<ContainerResult> {
-    let sql = 'SELECT c.id, c.name, c.description, c.displayOrder FROM c';
+    let sql = 'SELECT  c.name, c.description FROM c';
     const parameters: SqlParameter[] = [];
 
     if (filters.keyword) {
       sql += ` WHERE CONTAINS(LOWER(c.name), LOWER(@keyword)) OR CONTAINS(LOWER(c.description), LOWER(@keyword))`;
       parameters.push({ name: '@keyword', value: filters.keyword });
     }
-
-    sql += ' ORDER BY c.displayOrder OFFSET 0 LIMIT 100';
 
     const records = await this.query('Category', sql, parameters);
     return { container: 'Category', records, count: records.length };
@@ -162,7 +160,7 @@ export class RetrievalService {
     filters: QueryPlanFilters = {},
   ): Promise<ContainerResult> {
     const fields =
-      'c.id, c.name, c.description, c.status, c.startDate, c.endDate, c.budget';
+      'c.id, c.name, c.description, c.status, c.email, c.askExpert, c.vendor';
     const { sql, parameters } = this.buildUserQuery(fields, filters, userId);
     const records = await this.query('Project', sql, parameters);
     return { container: 'Project', records, count: records.length };
@@ -179,7 +177,8 @@ export class RetrievalService {
     userId: string,
     filters: QueryPlanFilters = {},
   ): Promise<ContainerResult> {
-    const fields = 'c.id, c.title, c.amount, c.status, c.createdAt, c.approvedAt';
+    const fields =
+      'c.id, c.userName, c.email, c.alternateContactNumber, c.message, c.location, c.quoteStatus';
     const { sql, parameters } = this.buildUserQuery(fields, filters, userId);
     const records = await this.query('Quote', sql, parameters);
     return { container: 'Quote', records, count: records.length };
@@ -197,7 +196,8 @@ export class RetrievalService {
     userId: string | null,
     filters: QueryPlanFilters = {},
   ): Promise<ContainerResult> {
-    const fields = 'c.id, c.name, c.description, c.status, c.price, c.category';
+    const fields =
+      'c.id, c.name, c.description, c.status, c.location, c.category';
     const { sql, parameters } = userId
       ? this.buildUserQuery(fields, filters, userId)
       : this.buildGeneralQuery(fields, filters);
@@ -217,7 +217,7 @@ export class RetrievalService {
     filters: QueryPlanFilters = {},
   ): Promise<ContainerResult> {
     const fields =
-      'c.id, c.name, c.contactName, c.email, c.phone, c.status, c.category';
+      'c.id, c.companyName, c.publicUrl, c.status, c.productServiceOfferings, c.locationOfService';
     const { sql, parameters } = this.buildUserQuery(fields, filters, userId);
     const records = await this.query('Vendor', sql, parameters);
     return { container: 'Vendor', records, count: records.length };
