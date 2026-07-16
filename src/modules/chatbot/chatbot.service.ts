@@ -81,21 +81,19 @@ export class ChatbotService {
 
       // ──────────────────────────────────────────────
       // 5. Retrieve data from Cosmos DB using the plan
-      //    All queries are scoped to the authenticated userId. If userId is
-      //    not provided (anonymous), skip database retrieval.
+      //    Authenticated users get their own scoped records.
+      //    Anonymous users get general (unscoped) results from the database.
       // ──────────────────────────────────────────────
-      if (userId) {
-        if (queryPlan.operation === 'SUMMARY') {
-          // Parallel fetch from all containers
-          knowledge = await this.retrievalService.getBusinessSummary(userId);
-        } else if (queryPlan.containers.length > 0) {
-          // Targeted fetch for specified containers with filters
-          knowledge = await this.retrievalService.fetchByContainers(
-            queryPlan.containers,
-            userId,
-            queryPlan.filters,
-          );
-        }
+      if (queryPlan.operation === 'SUMMARY') {
+        // Parallel fetch from all containers
+        knowledge = await this.retrievalService.getBusinessSummary(userId);
+      } else if (queryPlan.containers.length > 0) {
+        // Targeted fetch for specified containers with filters
+        knowledge = await this.retrievalService.fetchByContainers(
+          queryPlan.containers,
+          userId,
+          queryPlan.filters,
+        );
       }
     } catch (error) {
       this.logger.error('Query planning or retrieval failed', error);

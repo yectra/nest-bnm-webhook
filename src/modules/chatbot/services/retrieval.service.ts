@@ -40,7 +40,7 @@ export class RetrievalService {
   }
 
   /**
-   * Build a simple user-scoped query with optional status filter.
+   * Build a user-scoped query (authenticated users).
    */
   private buildUserQuery(
     fields: string,
@@ -67,6 +67,43 @@ export class RetrievalService {
       SELECT ${fields}
       FROM c
       WHERE ${conditions.join(' AND ')}
+      OFFSET 0 LIMIT ${limit}
+    `;
+
+    return { sql, parameters: params };
+  }
+
+  /**
+   * Build a general query for anonymous users — no userId filter.
+   * Returns all records, optionally filtered by status/keyword.
+   */
+  private buildGeneralQuery(
+    fields: string,
+    filters: QueryPlanFilters,
+    limit = 50,
+  ): { sql: string; parameters: SqlParameter[] } {
+    const params: SqlParameter[] = [];
+    const conditions: string[] = [];
+
+    if (filters.status) {
+      conditions.push('LOWER(c.status) = LOWER(@status)');
+      params.push({ name: '@status', value: filters.status });
+    }
+
+    if (filters.keyword) {
+      conditions.push(
+        `(CONTAINS(LOWER(c.name), LOWER(@keyword)) OR CONTAINS(LOWER(c.description), LOWER(@keyword)))`,
+      );
+      params.push({ name: '@keyword', value: filters.keyword });
+    }
+
+    const whereClause =
+      conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const sql = `
+      SELECT ${fields}
+      FROM c
+      ${whereClause}
       OFFSET 0 LIMIT ${limit}
     `;
 
@@ -102,10 +139,12 @@ export class RetrievalService {
   // ──────────────────────────────────────────────
 
   async getContacts(
-    userId: string,
+    userId: string | null,
     filters: QueryPlanFilters = {},
   ): Promise<ContainerResult> {
-    const { sql, parameters } = this.buildUserQuery('*', filters, userId);
+    const { sql, parameters } = userId
+      ? this.buildUserQuery('*', filters, userId)
+      : this.buildGeneralQuery('*', filters);
     const records = await this.query('ContactUs', sql, parameters);
     return { container: 'ContactUs', records, count: records.length };
   }
@@ -115,14 +154,14 @@ export class RetrievalService {
   // ──────────────────────────────────────────────
 
   async getProjects(
-    userId: string,
+    userId: string | null,
     filters: QueryPlanFilters = {},
   ): Promise<ContainerResult> {
-    const { sql, parameters } = this.buildUserQuery(
-      'c.id, c.name, c.description, c.status, c.startDate, c.endDate, c.budget',
-      filters,
-      userId,
-    );
+    const fields =
+      'c.id, c.name, c.description, c.status, c.startDate, c.endDate, c.budget';
+    const { sql, parameters } = userId
+      ? this.buildUserQuery(fields, filters, userId)
+      : this.buildGeneralQuery(fields, filters);
     const records = await this.query('Project', sql, parameters);
     return { container: 'Project', records, count: records.length };
   }
@@ -132,14 +171,13 @@ export class RetrievalService {
   // ──────────────────────────────────────────────
 
   async getQuotes(
-    userId: string,
+    userId: string | null,
     filters: QueryPlanFilters = {},
   ): Promise<ContainerResult> {
-    const { sql, parameters } = this.buildUserQuery(
-      'c.id, c.title, c.amount, c.status, c.createdAt, c.approvedAt',
-      filters,
-      userId,
-    );
+    const fields = 'c.id, c.title, c.amount, c.status, c.createdAt, c.approvedAt';
+    const { sql, parameters } = userId
+      ? this.buildUserQuery(fields, filters, userId)
+      : this.buildGeneralQuery(fields, filters);
     const records = await this.query('Quote', sql, parameters);
     return { container: 'Quote', records, count: records.length };
   }
@@ -149,14 +187,13 @@ export class RetrievalService {
   // ──────────────────────────────────────────────
 
   async getServices(
-    userId: string,
+    userId: string | null,
     filters: QueryPlanFilters = {},
   ): Promise<ContainerResult> {
-    const { sql, parameters } = this.buildUserQuery(
-      'c.id, c.name, c.description, c.status, c.price, c.category',
-      filters,
-      userId,
-    );
+    const fields = 'c.id, c.name, c.description, c.status, c.price, c.category';
+    const { sql, parameters } = userId
+      ? this.buildUserQuery(fields, filters, userId)
+      : this.buildGeneralQuery(fields, filters);
     const records = await this.query('Service', sql, parameters);
     return { container: 'Service', records, count: records.length };
   }
@@ -166,14 +203,14 @@ export class RetrievalService {
   // ──────────────────────────────────────────────
 
   async getVendors(
-    userId: string,
+    userId: string | null,
     filters: QueryPlanFilters = {},
   ): Promise<ContainerResult> {
-    const { sql, parameters } = this.buildUserQuery(
-      'c.id, c.name, c.contactName, c.email, c.phone, c.status, c.category',
-      filters,
-      userId,
-    );
+    const fields =
+      'c.id, c.name, c.contactName, c.email, c.phone, c.status, c.category';
+    const { sql, parameters } = userId
+      ? this.buildUserQuery(fields, filters, userId)
+      : this.buildGeneralQuery(fields, filters);
     const records = await this.query('Vendor', sql, parameters);
     return { container: 'Vendor', records, count: records.length };
   }
@@ -183,10 +220,12 @@ export class RetrievalService {
   // ──────────────────────────────────────────────
 
   async getExperts(
-    userId: string,
+    userId: string | null,
     filters: QueryPlanFilters = {},
   ): Promise<ContainerResult> {
-    const { sql, parameters } = this.buildUserQuery('*', filters, userId);
+    const { sql, parameters } = userId
+      ? this.buildUserQuery('*', filters, userId)
+      : this.buildGeneralQuery('*', filters);
     const records = await this.query('AskOurExpert', sql, parameters);
     return { container: 'AskOurExpert', records, count: records.length };
   }
@@ -199,7 +238,7 @@ export class RetrievalService {
    * Fetch high-level counts and recent records from all containers
    * simultaneously. Returns an aggregated view of the user's business.
    */
-  async getBusinessSummary(userId: string): Promise<ContainerResult[]> {
+  async getBusinessSummary(userId: string | null): Promise<ContainerResult[]> {
     const [contacts, projects, quotes, services, vendors, experts, categories] =
       await Promise.allSettled([
         this.getContacts(userId, {}),
@@ -244,7 +283,7 @@ export class RetrievalService {
    */
   async fetchByContainers(
     containerNames: string[],
-    userId: string,
+    userId: string | null,
     filters: QueryPlanFilters = {},
   ): Promise<ContainerResult[]> {
     const tasks = containerNames.map((name) =>
@@ -267,7 +306,7 @@ export class RetrievalService {
 
   private async fetchSingleContainer(
     containerName: string,
-    userId: string,
+    userId: string | null,
     filters: QueryPlanFilters,
   ): Promise<ContainerResult> {
     switch (containerName) {
