@@ -8,7 +8,7 @@ export class CallbackService {
     this.logger.log(
       `Twilio status callback: sid=${body.MessageSid}, status=${body.MessageStatus}, to=${body.To}`,
     );
-
+    console.log(`==========STSTUS CALL BACK BODY===========${body}============STSTUS CALL BACK BODY==========`);
     return {
       success: true,
       sid: body.MessageSid,

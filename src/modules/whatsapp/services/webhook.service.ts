@@ -7,7 +7,7 @@ import { twiml, validateRequest } from 'twilio';
 export class WebhookService {
   private readonly logger = new Logger(WebhookService.name);
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(private readonly configService: ConfigService) { }
 
   private getRequestUrl(request: Request) {
     const forwardedProto = request.get('x-forwarded-proto');
@@ -18,6 +18,8 @@ export class WebhookService {
   }
 
   validateTwilioRequest(request: Request, body: Record<string, string>) {
+    console.log(`=======BODY========= ${body} =========BODY=======`);
+    console.log(`=========request====== ${request}=======request====`);
     const authToken =
       this.configService.get<string>('twilio.authToken') ||
       this.configService.get<string>('TWILIO_AUTH_TOKEN');
@@ -67,7 +69,8 @@ export class WebhookService {
     response.message(
       `Hello ${name}. We received your WhatsApp message.\n\nYou said:\n"${incomingText}"\n\nThanks for messaging us.`,
     );
-
+    console.log(`=======WEBHOOK BODY========= ${body} =========WEBHOOK BODY=======`);
+    console.log(`=========WEBHOOK request====== ${request}=======WEBHOOK request====`);
     return {
       xml: response.toString(),
     };
