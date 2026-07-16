@@ -69,8 +69,8 @@ export class WebhookService {
     response.message(
       `Hello ${name}. We received your WhatsApp message.\n\nYou said:\n"${incomingText}"\n\nThanks for messaging us.`,
     );
-    console.log(`=======WEBHOOK BODY========= ${body} =========WEBHOOK BODY=======`);
-    console.log(`=========WEBHOOK request====== ${request}=======WEBHOOK request====`);
+    console.log(`=======WEBHOOK BODY========= ${JSON.stringify(body)} =========WEBHOOK BODY=======`);
+    console.log(`=========WEBHOOK request====== ${JSON.stringify(request)}=======WEBHOOK request====`);
     return {
       xml: response.toString(),
     };
