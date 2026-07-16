@@ -9,6 +9,9 @@ import databaseConfig from './config/database.config';
 
 import { HealthModule } from './modules/health/health.module';
 import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
+import { AIModule } from './modules/ai/ai.module';
+import { ChatbotModule } from './modules/chatbot/chatbot.module';
+import { CosmosModule } from './modules/database/cosmos.module';
 
 @Module({
   imports: [
@@ -35,6 +38,12 @@ import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
     HealthModule,
 
     WhatsappModule,
+
+    AIModule,
+
+    ChatbotModule,
+
+    CosmosModule,
   ],
 })
 export class AppModule {}
