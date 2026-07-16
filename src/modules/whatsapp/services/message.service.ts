@@ -10,8 +10,8 @@ export class MessageService {
   ) {}
 
   async sendWhatsAppMessage(to: string, body: string) {
-    console.log(`==========SEND WP MSG BODY=========== ${JSON.stringify(body)} ============SEND WP MSG BODY==========`);
-    console.log(`===========SEND WP MS TO========== ${to} ============SEND WP MS TO==========`);
+    console.log(`=====SEND_WP_MSG_BODY=======`, JSON.stringify(body, null, 2));
+    console.log(`=======SEND_WP_MSG_TO======`, to);
 
     const from =
       this.configService.get<string>('twilio.whatsappNumber') ||
