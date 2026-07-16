@@ -10,7 +10,7 @@ import { AuthorizationService } from './services/authorization.service';
 import { RetrievalService } from './services/retrieval.service';
 import { CosmosModule } from '../database/cosmos.module';
 import { QueryPlannerService } from './services/query-planner.service';
-import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 
 @Module({
   imports: [AIModule, CosmosModule],
@@ -28,4 +28,3 @@ import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
   ],
 })
 export class ChatbotModule {}
-

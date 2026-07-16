@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { KNOWLEDGE_MAP } from 'src/common/constants/knowledge-map';
+import { KNOWLEDGE_MAP } from '../../../common/constants/knowledge-map';
 
 @Injectable()
 export class IntentService {

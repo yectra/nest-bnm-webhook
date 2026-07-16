@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-return */
 import { Injectable, Logger } from '@nestjs/common';
 import { AIService } from '../../ai/ai.service';
-import { QueryPlan } from 'src/common/interfaces/query-plan.interface';
+import { QueryPlan } from '../../../common/interfaces/query-plan.interface';
 
 @Injectable()
 export class QueryPlannerService {

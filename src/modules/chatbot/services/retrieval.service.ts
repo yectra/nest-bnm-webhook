@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { CosmosService } from '../../database/cosmos.service';
 import { SqlParameter } from '@azure/cosmos';
-import { QueryPlanFilters } from 'src/common/interfaces/query-plan.interface';
+import { QueryPlanFilters } from '../../../common/interfaces/query-plan.interface';
 
 export interface ContainerResult {
   container: string;
