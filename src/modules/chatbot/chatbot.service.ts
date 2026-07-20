@@ -8,6 +8,8 @@ import {
   ContainerResult,
 } from './services/retrieval.service';
 import { QueryPlannerService } from './services/query-planner.service';
+import { ContentModerationService } from './services/content-moderation.service';
+import { ResponseFormatterService } from './services/response-formatter.service';
 
 @Injectable()
 export class ChatbotService {
@@ -20,6 +22,8 @@ export class ChatbotService {
     private readonly authorizationService: AuthorizationService,
     private readonly retrievalService: RetrievalService,
     private readonly queryPlannerService: QueryPlannerService,
+    private readonly contentModerationService: ContentModerationService,
+    private readonly responseFormatterService: ResponseFormatterService,
   ) {}
 
   /**
@@ -42,6 +46,21 @@ export class ChatbotService {
 
     // ──────────────────────────────────────────────
     // 1. Authorization — check for blocked keywords
+    // ──────────────────────────────────────────────
+    // ──────────────────────────────────────────────
+    // 0. Content moderation – block unsafe user input early
+    // ──────────────────────────────────────────────
+    const isFlagged = await this.contentModerationService.isFlagged(message);
+    if (isFlagged) {
+      return {
+        success: false,
+        response: 'Your message violates content policy.',
+        sessionId,
+      };
+    }
+
+    // ──────────────────────────────────────────────
+    // 1. Authorization – keyword blocklist (existing logic)
     // ──────────────────────────────────────────────
     const authorization = this.authorizationService.authorize(message);
 
@@ -78,6 +97,19 @@ export class ChatbotService {
       this.logger.log(
         `Query plan: ${JSON.stringify({ containers: queryPlan.containers, operation: queryPlan.operation, filters: queryPlan.filters })}`,
       );
+
+      // ──────────────────────────────────────────────
+      // RBAC filtering – ensure anonymous users cannot request private containers
+      // Private containers are defined in RetrievalService as ContactUs, Project, Quote, Vendor.
+      // If no userId (anonymous), strip those containers from the plan before retrieval.
+      // This avoids unnecessary fetch attempts and enforces access control early.
+      // ──────────────────────────────────────────────
+      if (!userId) {
+        const privateContainers = ['ContactUs', 'Project', 'Quote', 'Vendor'];
+        queryPlan.containers = queryPlan.containers.filter(
+          (c) => !privateContainers.includes(c),
+        );
+      }
 
       // ──────────────────────────────────────────────
       // 5. Retrieve data from Cosmos DB using the plan
@@ -130,6 +162,11 @@ export class ChatbotService {
     const answer = await this.aiService.generate(prompt);
 
     // ──────────────────────────────────────────────
+    // 9. Format the AI answer before returning to the client
+    // ──────────────────────────────────────────────
+    const formatted = this.responseFormatterService.format(answer);
+
+    // ──────────────────────────────────────────────
     // 8. Save assistant response to conversation history
     // ──────────────────────────────────────────────
     this.conversationService.addMessage(sessionId, {
@@ -142,7 +179,7 @@ export class ChatbotService {
     // ──────────────────────────────────────────────
     return {
       success: true,
-      response: answer,
+      response: formatted,
       sessionId,
       meta: {
         containersQueried: knowledge.map((k) => k.container),

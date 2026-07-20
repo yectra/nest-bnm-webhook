@@ -10,6 +10,8 @@ import { AuthorizationService } from './services/authorization.service';
 import { RetrievalService } from './services/retrieval.service';
 import { CosmosModule } from '../database/cosmos.module';
 import { QueryPlannerService } from './services/query-planner.service';
+import { ContentModerationService } from './services/content-moderation.service';
+import { ResponseFormatterService } from './services/response-formatter.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 
 @Module({
@@ -23,6 +25,9 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
     AuthorizationService,
     RetrievalService,
     QueryPlannerService,
+    // New services for moderation and response formatting
+    ContentModerationService,
+    ResponseFormatterService,
     JwtAuthGuard,
     Reflector,
   ],

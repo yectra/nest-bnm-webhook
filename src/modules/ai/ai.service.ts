@@ -22,13 +22,17 @@ export class AIService {
 
   async generate(prompt: string): Promise<string> {
     try {
-      const response = await this.client.responses.create({
+      // Use the Chat Completion API to generate a response from the LLM.
+      // The OpenAI SDK v6 provides `chat.completions.create` which returns
+      // a structure containing `choices`. We extract the generated text
+      // from the first choice's message content.
+      const response = await this.client.chat.completions.create({
         model: this.model,
-
-        input: prompt,
+        messages: [{ role: 'user', content: prompt }],
       });
 
-      return response.output_text;
+      // Guard against unexpected shapes – fallback to empty string.
+      return response?.choices?.[0]?.message?.content ?? '';
     } catch (e) {
       console.error(e);
 
