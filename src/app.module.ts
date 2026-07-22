@@ -6,19 +6,28 @@ import appConfig from './config/app.config';
 import twilioConfig from './config/twilio.config';
 import azureConfig from './config/azure.config';
 import databaseConfig from './config/database.config';
+import microsoftGraphConfig from './config/microsoft-graph.config';
 
 import { HealthModule } from './modules/health/health.module';
 import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
 import { AIModule } from './modules/ai/ai.module';
 import { ChatbotModule } from './modules/chatbot/chatbot.module';
 import { CosmosModule } from './modules/database/cosmos.module';
+import { GraphModule } from './modules/graph/graph.module';
+import { SharePointModule } from './modules/sharepoint/sharepoint.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
-      load: [appConfig, twilioConfig, azureConfig, databaseConfig],
+      load: [
+        appConfig,
+        twilioConfig,
+        azureConfig,
+        databaseConfig,
+        microsoftGraphConfig,
+      ],
       validationSchema: Joi.object({
         NODE_ENV: Joi.string()
           .valid('development', 'test', 'production')
@@ -32,6 +41,11 @@ import { CosmosModule } from './modules/database/cosmos.module';
           .required(),
         TWILIO_WEBHOOK_SECRET: Joi.string().optional(),
         TWILIO_STATUS_CALLBACK_URL: Joi.string().uri().optional(),
+        MS_GRAPH_TENANT_ID: Joi.string().optional(),
+        MS_GRAPH_CLIENT_ID: Joi.string().optional(),
+        MS_GRAPH_CLIENT_SECRET: Joi.string().optional(),
+        MS_GRAPH_BASE_URL: Joi.string().uri().optional(),
+        MS_GRAPH_SCOPE: Joi.string().optional(),
       }),
     }),
 
@@ -44,6 +58,10 @@ import { CosmosModule } from './modules/database/cosmos.module';
     ChatbotModule,
 
     CosmosModule,
+
+    GraphModule,
+
+    SharePointModule,
   ],
 })
 export class AppModule {}
