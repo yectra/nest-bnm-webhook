@@ -13,6 +13,7 @@ import { AIModule } from './modules/ai/ai.module';
 import { ChatbotModule } from './modules/chatbot/chatbot.module';
 import { CosmosModule } from './modules/database/cosmos.module';
 import { EmbeddingModule } from './modules/embedding/embedding.module';
+import { SearchModule } from './modules/search/search.module';
 
 @Module({
   imports: [
@@ -48,6 +49,8 @@ import { EmbeddingModule } from './modules/embedding/embedding.module';
     CosmosModule,
 
     EmbeddingModule,
+
+    SearchModule,
   ],
 })
 export class AppModule {}
