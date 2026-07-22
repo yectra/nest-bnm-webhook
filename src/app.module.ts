@@ -12,6 +12,7 @@ import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
 import { AIModule } from './modules/ai/ai.module';
 import { ChatbotModule } from './modules/chatbot/chatbot.module';
 import { CosmosModule } from './modules/database/cosmos.module';
+import { EmbeddingModule } from './modules/embedding/embedding.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { CosmosModule } from './modules/database/cosmos.module';
           .required(),
         TWILIO_WEBHOOK_SECRET: Joi.string().optional(),
         TWILIO_STATUS_CALLBACK_URL: Joi.string().uri().optional(),
+        EMBEDDING_MODEL: Joi.string().optional(),
       }),
     }),
 
@@ -44,6 +46,8 @@ import { CosmosModule } from './modules/database/cosmos.module';
     ChatbotModule,
 
     CosmosModule,
+
+    EmbeddingModule,
   ],
 })
 export class AppModule {}
