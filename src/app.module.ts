@@ -14,6 +14,7 @@ import { AIModule } from './modules/ai/ai.module';
 import { ChatbotModule } from './modules/chatbot/chatbot.module';
 import { CosmosModule } from './modules/database/cosmos.module';
 import { GraphModule } from './modules/graph/graph.module';
+import { SharePointModule } from './modules/sharepoint/sharepoint.module';
 
 @Module({
   imports: [
@@ -59,6 +60,8 @@ import { GraphModule } from './modules/graph/graph.module';
     CosmosModule,
 
     GraphModule,
+
+    SharePointModule,
   ],
 })
 export class AppModule {}
