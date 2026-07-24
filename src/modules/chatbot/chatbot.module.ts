@@ -31,5 +31,6 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
     JwtAuthGuard,
     Reflector,
   ],
+  exports: [ChatbotService],
 })
 export class ChatbotModule {}

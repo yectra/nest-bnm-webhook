@@ -12,6 +12,7 @@ import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
 import { AIModule } from './modules/ai/ai.module';
 import { ChatbotModule } from './modules/chatbot/chatbot.module';
 import { CosmosModule } from './modules/database/cosmos.module';
+import { BotModule } from './modules/bot/bot.module';
 
 @Module({
   imports: [
@@ -44,6 +45,8 @@ import { CosmosModule } from './modules/database/cosmos.module';
     ChatbotModule,
 
     CosmosModule,
+
+    BotModule,
   ],
 })
 export class AppModule {}
