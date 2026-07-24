@@ -5,4 +5,5 @@ export default registerAs('azure', () => ({
   openaiBaseUrl: process.env.OPENAI_BASE_URL,
   openaiApiKey: process.env.OPENAI_API_KEY,
   openaiModerationDeployment: process.env.OPENAI_MODERATION_DEPLOYMENT,
+  openaiEmbeddingDeployment: process.env.EMBEDDING_MODEL, // ← new line
 }));

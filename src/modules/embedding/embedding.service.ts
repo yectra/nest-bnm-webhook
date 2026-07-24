@@ -20,13 +20,17 @@ import { AZURE_OPENAI_CLIENT } from './azure-openai.provider';
 export class EmbeddingService {
   private readonly logger = new Logger(EmbeddingService.name);
   private readonly model: string;
+  private readonly dimensions: number;
+  private readonly maxCharsPerChunk: number;
 
   constructor(
     @Inject(AZURE_OPENAI_CLIENT) private readonly client: OpenAI,
     config: ConfigService,
   ) {
-    this.model =
-      config.get<string>('EMBEDDING_MODEL') ?? 'text-embedding-3-small';
+    this.model = config.getOrThrow<string>('EMBEDDING_MODEL');
+    this.dimensions = config.get<number>('EMBEDDING_DIMENSIONS') ?? 1536;
+    this.maxCharsPerChunk =
+      config.get<number>('EMBEDDING_MAX_CHARS_PER_CHUNK') ?? 6000;
   }
 
   /** Generate an embedding for a single piece of text. */
@@ -35,8 +39,10 @@ export class EmbeddingService {
     if (!input) {
       throw new BadRequestException('Cannot embed empty text');
     }
-    const [embedding] = await this.embedMany([input]);
-    return embedding;
+    const embeddings = await this.embedMany(this.splitIntoChunks(input));
+    return embeddings.length === 1
+      ? embeddings[0]
+      : this.normalizedMean(embeddings);
   }
 
   /**
@@ -53,13 +59,54 @@ export class EmbeddingService {
       const response = await this.client.embeddings.create({
         model: this.model,
         input: inputs,
+        dimensions: this.dimensions,
       });
-      return response.data
+      const embeddings = response.data
         .sort((a, b) => a.index - b.index)
         .map((d) => d.embedding);
+      if (embeddings.some((embedding) => embedding.length !== this.dimensions)) {
+        throw new Error(
+          `Azure OpenAI returned an embedding with dimensions different from the configured ${this.dimensions}`,
+        );
+      }
+      return embeddings;
     } catch (error) {
       this.logger.error('Azure OpenAI embedding generation failed', error);
       throw new InternalServerErrorException('Embedding generation failed');
     }
+  }
+
+  private splitIntoChunks(text: string): string[] {
+    if (text.length <= this.maxCharsPerChunk) {
+      return [text];
+    }
+
+    const chunks: string[] = [];
+    let remaining = text;
+    while (remaining.length > this.maxCharsPerChunk) {
+      const candidate = remaining.slice(0, this.maxCharsPerChunk);
+      const boundary = Math.max(
+        candidate.lastIndexOf('\n'),
+        candidate.lastIndexOf(' '),
+      );
+      const end = boundary > this.maxCharsPerChunk / 2 ? boundary : candidate.length;
+      chunks.push(remaining.slice(0, end).trim());
+      remaining = remaining.slice(end).trim();
+    }
+    if (remaining) {
+      chunks.push(remaining);
+    }
+    return chunks;
+  }
+
+  private normalizedMean(embeddings: number[][]): number[] {
+    const mean = Array.from({ length: this.dimensions }, () => 0);
+    for (const embedding of embeddings) {
+      embedding.forEach((value, index) => {
+        mean[index] += value / embeddings.length;
+      });
+    }
+    const magnitude = Math.sqrt(mean.reduce((sum, value) => sum + value ** 2, 0));
+    return magnitude === 0 ? mean : mean.map((value) => value / magnitude);
   }
 }

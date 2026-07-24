@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ChatMessage } from '../../../common/interfaces/chat-message.interface';
-import { ContainerResult } from './retrieval.service';
+import { VectorSearchResult } from '../../../common/interfaces/vector-search-result.interface';
 
 @Injectable()
 export class PromptService {
@@ -8,13 +8,13 @@ export class PromptService {
    * Build the full prompt sent to Azure OpenAI.
    *
    * @param history   Prior conversation messages
-   * @param knowledge Retrieved Cosmos DB records grouped by container
+   * @param matches Top Cosmos DB vector-search matches only
    * @param question  The user's current question
    * @param userId    Authenticated user ID (for context)
    */
   buildPrompt(
     history: ChatMessage[],
-    knowledge: ContainerResult[],
+    matches: VectorSearchResult[],
     question: string,
     userId: string,
   ): string {
@@ -22,7 +22,7 @@ export class PromptService {
       .map((m) => `${m.role.toUpperCase()}: ${m.content}`)
       .join('\n');
 
-    const knowledgeSection = this.formatKnowledge(knowledge);
+    const knowledgeSection = this.formatMatches(matches);
 
     return `
 You are a smart business data assistant for a platform called BrickNMortar.
@@ -36,13 +36,12 @@ User ID: ${userId}
 
 ## Strict Rules
 1. Answer ONLY using the "Retrieved Data" section below.
-2. If a section has 0 records, say: "No [container] records found for your account."
+2. The data below is the complete set of semantically relevant records. Do not
+   use general knowledge or assume records that are not present.
 3. Never expose data from a different user.
 4. Never invent data that is not present in the retrieved records.
 5. Be concise, friendly, and professional.
-6. If multiple containers were queried, summarise each one clearly.
-7. When relevant, mention counts (e.g. "You have 3 pending projects").
-8. Use bullet points or numbered lists when listing multiple items.
+6. Use bullet points or numbered lists when listing multiple items.
 
 ## Retrieved Data
 
@@ -63,21 +62,12 @@ ${question}
   /**
    * Format retrieved container results into a readable knowledge block.
    */
-  private formatKnowledge(knowledge: ContainerResult[]): string {
-    if (!knowledge || knowledge.length === 0) {
-      return '(No data retrieved from the database)';
-    }
-
-    return knowledge
-      .map((result) => {
-        const header = `### ${result.container} (${result.count} record${result.count !== 1 ? 's' : ''})`;
-
-        if (result.count === 0) {
-          return `${header}\n(No records found)`;
-        }
-
-        const data = JSON.stringify(result.records, null, 2);
-        return `${header}\n\`\`\`json\n${data}\n\`\`\``;
+  private formatMatches(matches: VectorSearchResult[]): string {
+    return matches
+      .map((match) => {
+        const source = match.sourceContainer ?? 'EmbeddedDocument';
+        const data = JSON.stringify(match.sourceData, null, 2);
+        return `### ${source} (${match.sourceId ?? match.id})\nSimilarity: ${match.similarity.toFixed(4)}\n\`\`\`json\n${data}\n\`\`\``;
       })
       .join('\n\n');
   }
