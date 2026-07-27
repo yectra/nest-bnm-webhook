@@ -47,7 +47,12 @@ export class EmbeddingBackfillService {
     }));
 
     if (eligible.length === 0) {
-      return { container: containerName, scanned: resources.length, embedded: 0, synced: 0 };
+      return {
+        container: containerName,
+        scanned: resources.length,
+        embedded: 0,
+        synced: 0,
+      };
     }
 
     const documentsNeedingEmbedding = eligible.filter(
@@ -68,7 +73,8 @@ export class EmbeddingBackfillService {
     await Promise.all(
       eligible.map(async ({ document, text }) => {
         const existingEmbedding = this.asEmbedding(document.embedding);
-        const embedding = existingEmbedding ?? generatedById.get(String(document.id));
+        const embedding =
+          existingEmbedding ?? generatedById.get(String(document.id));
         if (!embedding) {
           return;
         }
@@ -103,14 +109,14 @@ export class EmbeddingBackfillService {
     document: Record<string, unknown>,
   ): string {
     const fields: Record<SearchableContainer, string[]> = {
-      Service: ['name', 'description', 'category', 'location'],
-      Vendor: ['companyName', 'productServiceOfferings', 'locationOfService'],
-      Category: ['name', 'description'],
-      AskOurExpert: ['name', 'description', 'specialization'],
+      MovinService: ['name', 'description', 'category', 'location'],
     };
     const configuredText = fields[container]
       .map((field) => document[field])
-      .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+      .filter(
+        (value): value is string =>
+          typeof value === 'string' && value.trim().length > 0,
+      )
       .join('\n')
       .trim();
     if (configuredText) {
@@ -146,12 +152,17 @@ export class EmbeddingBackfillService {
 
   /** Cosmos SDKs can deserialize a vector as either an array or typed array. */
   private asEmbedding(value: unknown): number[] | undefined {
-    if (Array.isArray(value) && value.every((item) => typeof item === 'number')) {
+    if (
+      Array.isArray(value) &&
+      value.every((item) => typeof item === 'number')
+    ) {
       return value;
     }
     if (ArrayBuffer.isView(value)) {
       const values = Array.from(value as unknown as ArrayLike<number>);
-      return values.every((item) => typeof item === 'number') ? values : undefined;
+      return values.every((item) => typeof item === 'number')
+        ? values
+        : undefined;
     }
     return undefined;
   }

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { FabricIqService } from './fabric-iq.service';
+import { FabricIqController } from './fabric-iq.controller';
 
 /**
  * Fabric IQ module (Epic A / A5). Provides the service that queries the Fabric
@@ -11,5 +12,6 @@ import { FabricIqService } from './fabric-iq.service';
 @Module({
   providers: [FabricIqService],
   exports: [FabricIqService],
+  controllers: [FabricIqController],
 })
 export class FabricIqModule {}

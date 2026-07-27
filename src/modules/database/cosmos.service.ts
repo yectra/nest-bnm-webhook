@@ -44,9 +44,9 @@ export class CosmosService {
   async ensureVectorContainer(
     containerName: string,
     partitionKeyPath: string,
-    dimensions: number =
-      this.configService.get<number>('EMBEDDING_DIMENSIONS') ??
-      EMBEDDING_DIMENSIONS,
+    dimensions: number = this.configService.get<number>(
+      'EMBEDDING_DIMENSIONS',
+    ) ?? EMBEDDING_DIMENSIONS,
   ): Promise<Container> {
     const { container } = await this.database.containers.createIfNotExists({
       id: containerName,

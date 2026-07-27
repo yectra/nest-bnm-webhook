@@ -16,7 +16,9 @@ export const AZURE_OPENAI_CLIENT = 'AZURE_OPENAI_CLIENT';
 export const azureOpenAiClientProvider: Provider = {
   provide: AZURE_OPENAI_CLIENT,
   useFactory: (config: ConfigService): OpenAI => {
-    const configuredUrl = config.getOrThrow<string>('OPENAI_BASE_URL').replace(/\/+$/, '');
+    const configuredUrl = config
+      .getOrThrow<string>('OPENAI_BASE_URL')
+      .replace(/\/+$/, '');
     const baseURL = configuredUrl.endsWith('/openai/v1')
       ? `${configuredUrl}/`
       : `${configuredUrl}/openai/v1/`;

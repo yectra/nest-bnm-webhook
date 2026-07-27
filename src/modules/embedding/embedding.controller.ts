@@ -1,4 +1,10 @@
-import { BadRequestException, Body, Controller, Post, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiHeader, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { RequiredApiKeyGuard } from '../../common/guards/required-api-key.guard';
@@ -6,7 +12,10 @@ import { CosmosService } from '../database/cosmos.service';
 import { BackfillEmbeddingsDto } from './dto/backfill-embeddings.dto';
 import { CreateEmbeddedDocumentDto } from './dto/create-embedded-document.dto';
 import { EmbeddingPreviewDto } from './dto/embedding-preview.dto';
-import { EmbeddingBackfillService, BackfillResult } from './embedding-backfill.service';
+import {
+  EmbeddingBackfillService,
+  BackfillResult,
+} from './embedding-backfill.service';
 import { EmbeddingService } from './embedding.service';
 import { EmbeddingWriteService } from './embedding-write.service';
 import { EmbeddedDocumentService } from './embedded-document.service';
@@ -33,7 +42,9 @@ export class EmbeddingController {
   }
 
   @Post('documents')
-  @ApiOperation({ summary: 'Create or update one catalog document with an embedding' })
+  @ApiOperation({
+    summary: 'Create or update one catalog document with an embedding',
+  })
   async createDocument(@Body() dto: CreateEmbeddedDocumentDto) {
     if (typeof dto.document.id !== 'string' || !dto.document.id.trim()) {
       throw new BadRequestException('document.id must be a non-empty string');
@@ -63,12 +74,10 @@ export class EmbeddingController {
       text,
       stored.embedding,
     );
-    await this.cosmosService
-      .getContainer(dto.container)
-      .items.upsert({
-        ...stored,
-        embeddingProjectionSyncedAt: new Date().toISOString(),
-      });
+    await this.cosmosService.getContainer(dto.container).items.upsert({
+      ...stored,
+      embeddingProjectionSyncedAt: new Date().toISOString(),
+    });
     return {
       container: dto.container,
       id: stored.id,
@@ -77,7 +86,9 @@ export class EmbeddingController {
   }
 
   @Post('backfill')
-  @ApiOperation({ summary: 'Create and store embeddings for existing catalog documents' })
+  @ApiOperation({
+    summary: 'Create and store embeddings for existing catalog documents',
+  })
   backfill(@Body() dto: BackfillEmbeddingsDto): Promise<BackfillResult> {
     return this.backfillService.backfill(dto.container, dto.limit);
   }
@@ -87,10 +98,7 @@ export class EmbeddingController {
     document: Record<string, unknown>,
   ): string {
     const fields: Record<CreateEmbeddedDocumentDto['container'], string[]> = {
-      Service: ['name', 'description', 'category', 'location'],
-      Vendor: ['companyName', 'productServiceOfferings', 'locationOfService'],
-      Category: ['name', 'description'],
-      AskOurExpert: ['name', 'description', 'specialization'],
+      MovinService: ['name', 'description', 'category', 'location'],
     };
     return fields[container]
       .map((field) => document[field])

@@ -5,12 +5,7 @@
  * containers (Project, Quote, ContactUs) are intentionally excluded from the
  * public endpoint.
  */
-export const SEARCHABLE_CONTAINERS = [
-  'Service',
-  'Vendor',
-  'Category',
-  'AskOurExpert',
-] as const;
+export const SEARCHABLE_CONTAINERS = ['MovinService'] as const;
 
 export type SearchableContainer = (typeof SEARCHABLE_CONTAINERS)[number];
 
