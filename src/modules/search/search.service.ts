@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 
 import { RetrievalResult } from '../../common/interfaces/retrieval-result.interface';
 import { EmbeddingService } from '../embedding/embedding.service';
@@ -14,8 +14,6 @@ import { DEFAULT_SEARCH_TOP, SEARCHABLE_CONTAINERS } from './search.constants';
  */
 @Injectable()
 export class SearchService {
-  private readonly logger = new Logger(SearchService.name);
-
   constructor(
     private readonly embeddingService: EmbeddingService,
     private readonly searchRepository: SearchRepository,
@@ -40,17 +38,12 @@ export class SearchService {
 
     const queryVector = await this.embeddingService.embed(query);
 
+    // Do not turn a configuration/indexing failure into an empty successful
+    // response. An empty result is meaningful only after every target was
+    // queried successfully.
     const perContainer = await Promise.all(
       targets.map((container) =>
-        this.searchRepository
-          .vectorSearch(container, queryVector, top)
-          .catch((error) => {
-            this.logger.warn(
-              `Skipping container "${container}" after search failure`,
-              error,
-            );
-            return [] as RetrievalResult[];
-          }),
+        this.searchRepository.vectorSearch(container, queryVector, top),
       ),
     );
 
