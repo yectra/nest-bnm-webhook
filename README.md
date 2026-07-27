@@ -39,6 +39,16 @@ TWILIO_AUTH_TOKEN=your_auth_token
 TWILIO_WHATSAPP_NUMBER=whatsapp:+14155238886
 TWILIO_STATUS_CALLBACK_URL=https://your-app-name.azurewebsites.net/api/webhook/whatsapp/status
 TWILIO_WEBHOOK_SECRET=optional_shared_secret
+OPENAI_BASE_URL=https://your-resource.openai.azure.com/openai/v1/
+OPENAI_API_KEY=your_azure_openai_key
+OPENAI_MODEL=your_chat_deployment_name
+EMBEDDING_MODEL=your_embedding_deployment_name
+EMBEDDING_DIMENSIONS=1536
+OPENAI_TIMEOUT_MS=30000
+COSMOS_ENDPOINT=https://your-account.documents.azure.com:443/
+COSMOS_KEY=your_cosmos_key
+COSMOS_DATABASE=your_database_name
+API_KEY=a-long-random-administrative-api-key
 ```
 
 Notes:
@@ -46,6 +56,63 @@ Notes:
 - `APP_BASE_URL` should be your public Azure App Service URL.
 - `TWILIO_STATUS_CALLBACK_URL` is used when this app sends outbound WhatsApp messages.
 - `TWILIO_WEBHOOK_SECRET` is optional. Real Twilio requests are validated with the Twilio auth token.
+- `EMBEDDING_MODEL` must be the Azure deployment name. `text-embedding-3-small`
+  should use 1536 dimensions; all Cosmos vector containers must use the same value.
+
+## Embeddings and semantic search
+
+The embedding routes are protected by `x-api-key`; set `API_KEY` before using
+them. First verify the Azure deployment:
+
+```bash
+curl -X POST http://localhost:3000/api/embeddings/preview \
+  -H "x-api-key: $API_KEY" -H "content-type: application/json" \
+  -d '{"text":"modular kitchen vendors in Chennai"}'
+```
+
+It returns the vector dimension without exposing the vector itself. Then
+back-fill one catalog container at a time. Repeat until `embedded` is zero:
+
+```bash
+curl -X POST http://localhost:3000/api/embeddings/backfill \
+  -H "x-api-key: $API_KEY" -H "content-type: application/json" \
+  -d '{"container":"Service","limit":25}'
+```
+
+To create a new test catalog item and its embedding in one request, use:
+
+```bash
+curl -X POST http://localhost:3000/api/embeddings/documents \
+  -H "x-api-key: $API_KEY" -H "content-type: application/json" \
+  -d '{"container":"Service","document":{"id":"service-demo-001","name":"Modular kitchen installation","description":"Custom modular kitchens in Chennai","category":"Interior Design","location":"Chennai"}}'
+```
+
+For a newly created container this endpoint provisions a `/id` partition key
+and the required vector policy. It does not alter the immutable policy of an
+existing container.
+
+Finally query the populated catalog:
+
+```bash
+curl -X POST http://localhost:3000/api/search/semantic \
+  -H "content-type: application/json" \
+  -d '{"query":"modular kitchen vendors in Chennai","containers":["Service"],"top":5}'
+```
+
+Important: Cosmos DB vector embedding policies cannot be added to an existing
+container. Existing `Service`, `Vendor`, `Category`, and `AskOurExpert`
+containers must be recreated/migrated with the `/embedding` float32 cosine
+DiskANN policy in `src/modules/database/vector-policy.ts`, then back-filled.
+
+The chatbot searches only the configured `EMBEDDED_DOCUMENTS_CONTAINER`
+(default: `EmbeddedDocuments`). The document creation and backfill endpoints
+maintain this searchable projection automatically; its records contain source
+metadata, source data, and the embedding used by Cosmos vector search.
+
+Configure chatbot retrieval with `CHATBOT_VECTOR_TOP_K` (default `5`) and
+`CHATBOT_VECTOR_MIN_SIMILARITY` (default `0.7`). The chatbot does not run a
+keyword fallback: if native Cosmos vector search returns no result above the
+threshold, it responds with `No relevant information found.`
 
 ## Twilio WhatsApp configuration
 

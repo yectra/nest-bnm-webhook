@@ -15,10 +15,18 @@ export const AZURE_OPENAI_CLIENT = 'AZURE_OPENAI_CLIENT';
  */
 export const azureOpenAiClientProvider: Provider = {
   provide: AZURE_OPENAI_CLIENT,
-  useFactory: (config: ConfigService): OpenAI =>
-    new OpenAI({
-      baseURL: config.get<string>('OPENAI_BASE_URL'),
-      apiKey: config.get<string>('OPENAI_API_KEY'),
-    }),
+  useFactory: (config: ConfigService): OpenAI => {
+    const configuredUrl = config.getOrThrow<string>('OPENAI_BASE_URL').replace(/\/+$/, '');
+    const baseURL = configuredUrl.endsWith('/openai/v1')
+      ? `${configuredUrl}/`
+      : `${configuredUrl}/openai/v1/`;
+
+    return new OpenAI({
+      baseURL,
+      apiKey: config.getOrThrow<string>('OPENAI_API_KEY'),
+      timeout: config.get<number>('OPENAI_TIMEOUT_MS') ?? 30_000,
+      maxRetries: 2,
+    });
+  },
   inject: [ConfigService],
 };
