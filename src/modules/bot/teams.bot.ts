@@ -51,9 +51,17 @@ export class TeamsBot extends ActivityHandler {
       const message = context.activity.text?.trim() ?? '';
       const replyToId = context.activity.replyToId;
       
-      const websiteConversationId = replyToId 
+      let websiteConversationId = replyToId 
         ? this.notificationService.getWebsiteConversationId(replyToId)
         : undefined;
+
+      // Fallback: If they didn't reply to a specific message, route to the active conversation
+      if (!websiteConversationId) {
+        websiteConversationId = this.notificationService.getActiveWebsiteConversationId();
+      }
+
+      const mapKeys = this.notificationService.getMapKeys().join(', ');
+      this.logger.log(`[DEBUG] Incoming Teams Message. replyToId=${replyToId}. Mapped websiteConversationId=${websiteConversationId}. Known Map Keys: [${mapKeys}]`);
 
       if (websiteConversationId) {
         this.logger.log(`Intercepted Live Agent reply to Website conversationId=${websiteConversationId}`);
