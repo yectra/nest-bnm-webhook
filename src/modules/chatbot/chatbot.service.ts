@@ -6,6 +6,7 @@ import { ContentModerationService } from './services/content-moderation.service'
 import { ConversationService } from './services/conversation.service';
 import { PromptService } from './services/prompt.service';
 import { ResponseFormatterService } from './services/response-formatter.service';
+import { TeamsNotificationService } from '../bot/teams-notification.service';
 import { VectorSearchService } from './services/vector-search.service';
 
 const NO_RELEVANT_INFORMATION = 'No relevant information found.';
@@ -23,6 +24,7 @@ export class ChatbotService {
     private readonly vectorSearchService: VectorSearchService,
     private readonly contentModerationService: ContentModerationService,
     private readonly responseFormatterService: ResponseFormatterService,
+    private readonly teamsNotificationService: TeamsNotificationService,
   ) {}
 
   async chat(
@@ -30,6 +32,7 @@ export class ChatbotService {
     tenantId: string | undefined,
     message: string,
     sessionId: string,
+    notifyTeams = true,
   ) {
     this.logger.log(
       `Chat request from userId=${userId ?? 'anonymous'}, tenantId=${tenantId ?? 'none'}, sessionId=${sessionId}`,
@@ -79,6 +82,19 @@ export class ChatbotService {
     const answer = this.responseFormatterService.format(
       await this.aiService.generate(prompt),
     );
+
+    const formatted = this.responseFormatterService.format(answer);
+
+    // 👇 Send to Teams
+    const teamsNotification = notifyTeams
+      ? await this.teamsNotificationService.sendMessage({
+          userId,
+          sessionId,
+          question: message,
+          answer: formatted,
+        })
+      : { sent: false, reason: 'not_requested' };
+
     this.conversationService.addMessage(sessionId, {
       role: 'assistant',
       content: answer,
@@ -97,6 +113,7 @@ export class ChatbotService {
           similarity: match.similarity,
           distance: match.distance,
         })),
+        teamsNotification,
       },
     };
   }

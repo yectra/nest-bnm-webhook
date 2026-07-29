@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { AIModule } from '../ai/ai.module';
 import { ChatbotController } from './chatbot.controller';
@@ -11,11 +11,17 @@ import { CosmosModule } from '../database/cosmos.module';
 import { ContentModerationService } from './services/content-moderation.service';
 import { ResponseFormatterService } from './services/response-formatter.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { BotModule } from '../bot/bot.module';
 import { EmbeddingModule } from '../embedding/embedding.module';
 import { VectorSearchService } from './services/vector-search.service';
 
 @Module({
-  imports: [AIModule, CosmosModule, EmbeddingModule],
+  imports: [
+    AIModule,
+    CosmosModule,
+    EmbeddingModule,
+    forwardRef(() => BotModule),
+  ],
   controllers: [ChatbotController],
   providers: [
     ChatbotService,
@@ -30,5 +36,6 @@ import { VectorSearchService } from './services/vector-search.service';
     JwtAuthGuard,
     Reflector,
   ],
+  exports: [ChatbotService],
 })
 export class ChatbotModule {}

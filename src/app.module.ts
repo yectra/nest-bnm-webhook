@@ -12,6 +12,7 @@ import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
 import { AIModule } from './modules/ai/ai.module';
 import { ChatbotModule } from './modules/chatbot/chatbot.module';
 import { CosmosModule } from './modules/database/cosmos.module';
+import { BotModule } from './modules/bot/bot.module';
 import { EmbeddingModule } from './modules/embedding/embedding.module';
 import { SearchModule } from './modules/search/search.module';
 
@@ -81,6 +82,8 @@ import { SearchModule } from './modules/search/search.module';
     ChatbotModule,
 
     CosmosModule,
+
+    BotModule,
 
     EmbeddingModule,
 
