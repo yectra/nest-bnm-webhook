@@ -1,41 +1,41 @@
 import { forwardRef, Module } from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
-import { AIModule } from '../ai/ai.module';
 import { ChatbotController } from './chatbot.controller';
 import { ChatbotService } from './chatbot.service';
-import { ConversationService } from './services/conversation.service';
-import { PromptService } from './services/prompt.service';
-import { IntentService } from './services/intent.service';
-import { AuthorizationService } from './services/authorization.service';
-import { CosmosModule } from '../database/cosmos.module';
-import { ContentModerationService } from './services/content-moderation.service';
-import { ResponseFormatterService } from './services/response-formatter.service';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { BotModule } from '../bot/bot.module';
-import { EmbeddingModule } from '../embedding/embedding.module';
+import { ChatGateway } from './gateway/chat.gateway';
+import { ContainerClassifierService } from './services/container-classifier.service';
+import { EmbeddingService } from './services/embedding.service';
 import { VectorSearchService } from './services/vector-search.service';
+import { PromptBuilderService } from './services/prompt-builder.service';
+import { AIService } from './services/ai.service';
+import { TeamsNotificationService } from './services/teams-notification.service';
+import { WebsiteRealtimeService } from './services/website-realtime.service';
+import { ConversationRepository } from './repositories/conversation.repository';
+import { CosmosRepository } from './repositories/cosmos.repository';
+import { BotAdapter } from '../bot/bot.adapter';
 
 @Module({
-  imports: [
-    AIModule,
-    CosmosModule,
-    EmbeddingModule,
-    forwardRef(() => BotModule),
-  ],
+  imports: [],
   controllers: [ChatbotController],
   providers: [
-    ChatbotService,
-    ConversationService,
-    PromptService,
-    IntentService,
-    AuthorizationService,
+    BotAdapter,
+    CosmosRepository,
+    ConversationRepository,
+    ContainerClassifierService,
+    EmbeddingService,
     VectorSearchService,
-    // New services for moderation and response formatting
-    ContentModerationService,
-    ResponseFormatterService,
-    JwtAuthGuard,
-    Reflector,
+    PromptBuilderService,
+    AIService,
+    TeamsNotificationService,
+    WebsiteRealtimeService,
+    ChatGateway,
+    ChatbotService,
   ],
-  exports: [ChatbotService],
+  exports: [
+    ChatbotService,
+    ConversationRepository,
+    TeamsNotificationService,
+    WebsiteRealtimeService,
+    ChatGateway,
+  ],
 })
 export class ChatbotModule {}
