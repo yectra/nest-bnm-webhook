@@ -7,16 +7,21 @@ import { ConversationService } from './services/conversation.service';
 import { PromptService } from './services/prompt.service';
 import { IntentService } from './services/intent.service';
 import { AuthorizationService } from './services/authorization.service';
-import { RetrievalService } from './services/retrieval.service';
 import { CosmosModule } from '../database/cosmos.module';
-import { QueryPlannerService } from './services/query-planner.service';
 import { ContentModerationService } from './services/content-moderation.service';
 import { ResponseFormatterService } from './services/response-formatter.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { BotModule } from '../bot/bot.module';
+import { EmbeddingModule } from '../embedding/embedding.module';
+import { VectorSearchService } from './services/vector-search.service';
 
 @Module({
-  imports: [AIModule, CosmosModule, forwardRef(() => BotModule)],
+  imports: [
+    AIModule,
+    CosmosModule,
+    EmbeddingModule,
+    forwardRef(() => BotModule),
+  ],
   controllers: [ChatbotController],
   providers: [
     ChatbotService,
@@ -24,8 +29,7 @@ import { BotModule } from '../bot/bot.module';
     PromptService,
     IntentService,
     AuthorizationService,
-    RetrievalService,
-    QueryPlannerService,
+    VectorSearchService,
     // New services for moderation and response formatting
     ContentModerationService,
     ResponseFormatterService,
