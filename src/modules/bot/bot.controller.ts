@@ -13,6 +13,9 @@ export class BotController {
   @Post()
   async messages(@Req() req: Request, @Res() res: Response) {
     console.log('✅ Azure Bot reached NestJS');
+    console.log('Method:', req.method);
+    console.log('Headers:', req.headers);
+    console.log('Body:', JSON.stringify(req.body, null, 2));
 
     await this.adapter.process(req, res, async (context) => {
       console.log('✅ Activity Type:', context.activity.type);
