@@ -14,6 +14,7 @@ export class TeamsNotificationService {
   private readonly logger = new Logger(TeamsNotificationService.name);
   private conversationReference?: Partial<ConversationReference>;
   private readonly messageToWebsiteMap = new Map<string, string>();
+  private activeWebsiteConversationId?: string;
   private readonly containerName = 'TeamsConfig';
   private readonly referenceId = 'proactive-reference';
 
@@ -22,32 +23,44 @@ export class TeamsNotificationService {
     private readonly cosmosRepository: CosmosRepository,
   ) {}
 
+  private persistState(): void {
+    void this.cosmosRepository.saveItem(this.containerName, {
+      id: this.referenceId,
+      reference: this.conversationReference,
+      map: Array.from(this.messageToWebsiteMap.entries()),
+      activeWebsiteConversationId: this.activeWebsiteConversationId,
+    }).catch(err => {
+      this.logger.error('Failed to persist Teams state to Cosmos DB', err);
+    });
+  }
+
   /** Save conversation reference when user messages bot in Teams or bot is added */
   saveConversationReference(reference: Partial<ConversationReference>): void {
     this.conversationReference = reference;
     this.logger.log('Teams conversation reference saved to memory');
-    
-    // Fire-and-forget saving to Cosmos DB
-    void this.cosmosRepository.saveItem(this.containerName, {
-      id: this.referenceId,
-      reference,
-    }).catch(err => {
-      this.logger.error('Failed to persist Teams conversation reference to Cosmos DB', err);
-    });
+    this.persistState();
   }
 
-  /** Try to reload conversation reference from Cosmos DB if memory is wiped */
+  /** Try to reload state from Cosmos DB if memory is wiped */
   async loadConversationReference(): Promise<void> {
     if (this.conversationReference) return;
 
     try {
-      const data = await this.cosmosRepository.getItem<{ id: string; reference: Partial<ConversationReference> }>(
+      const data = await this.cosmosRepository.getItem<{ id: string; reference?: Partial<ConversationReference>; map?: [string, string][]; activeWebsiteConversationId?: string; }>(
         this.containerName,
         this.referenceId,
       );
-      if (data?.reference) {
-        this.conversationReference = data.reference;
-        this.logger.log('Teams conversation reference reloaded from Cosmos DB');
+      if (data) {
+        if (data.reference) this.conversationReference = data.reference;
+        if (data.map) {
+          for (const [k, v] of data.map) {
+            this.messageToWebsiteMap.set(k, v);
+          }
+        }
+        if (data.activeWebsiteConversationId) {
+          this.activeWebsiteConversationId = data.activeWebsiteConversationId;
+        }
+        this.logger.log('Teams state reloaded from Cosmos DB');
       }
     } catch (error) {
       this.logger.error('Error reloading Teams conversation reference from Cosmos DB', error);
@@ -62,6 +75,14 @@ export class TeamsNotificationService {
   /** Look up which website conversation a Teams message is replying to */
   getWebsiteConversationId(teamsMessageId: string): string | undefined {
     return this.messageToWebsiteMap.get(teamsMessageId);
+  }
+
+  getActiveWebsiteConversationId(): string | undefined {
+    return this.activeWebsiteConversationId;
+  }
+
+  getMapKeys(): string[] {
+    return Array.from(this.messageToWebsiteMap.keys());
   }
 
   /** Send proactive Teams message/card. No AI or DB logic here. */
@@ -95,12 +116,14 @@ export class TeamsNotificationService {
           if (response?.id) {
             // Map the Teams message ID to the Website Conversation ID
             this.messageToWebsiteMap.set(response.id, data.conversationId);
-            // Also store it without the prefix just in case Teams modifies the replyToId format
             const cleanId = response.id.split('|')[0]; 
             this.messageToWebsiteMap.set(cleanId, data.conversationId);
           }
         },
       );
+
+      this.activeWebsiteConversationId = data.conversationId;
+      this.persistState();
 
       this.logger.log(`Proactive Teams notification sent for conversationId=${data.conversationId}`);
       return { sent: true };
