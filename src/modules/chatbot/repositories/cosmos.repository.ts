@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { CosmosClient, Database, Container, SqlParameter } from '@azure/cosmos';
+import { CosmosClient, Database, Container, SqlParameter, ItemDefinition } from '@azure/cosmos';
 import {
   buildVectorEmbeddingPolicy,
   buildVectorIndexingPolicy,
@@ -67,6 +67,20 @@ export class CosmosRepository {
     } catch (error) {
       this.logger.warn(`Cosmos DB vector query error on "${containerName}"`, error);
       return [];
+    }
+  }
+
+  async getItem<T extends ItemDefinition>(containerName: string, id: string, partitionKeyValue: string = id): Promise<T | null> {
+    try {
+      const container = this.database.container(containerName);
+      const { resource } = await container.item(id, partitionKeyValue).read<T>();
+      return resource ?? null;
+    } catch (error: any) {
+      if (error.code === 404) {
+        return null;
+      }
+      this.logger.warn(`Cosmos DB getItem error on "${containerName}" for id "${id}"`, error);
+      return null;
     }
   }
 
