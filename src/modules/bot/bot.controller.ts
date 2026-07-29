@@ -12,7 +12,11 @@ export class BotController {
 
   @Post()
   async messages(@Req() req: Request, @Res() res: Response) {
+    console.log('✅ Azure Bot reached NestJS');
+
     await this.adapter.process(req, res, async (context) => {
+      console.log('✅ Activity Type:', context.activity.type);
+
       await this.bot.run(context);
     });
   }

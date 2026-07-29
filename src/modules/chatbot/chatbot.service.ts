@@ -10,6 +10,7 @@ import {
 import { QueryPlannerService } from './services/query-planner.service';
 import { ContentModerationService } from './services/content-moderation.service';
 import { ResponseFormatterService } from './services/response-formatter.service';
+import { TeamsNotificationService } from '../bot/teams-notification.service';
 
 @Injectable()
 export class ChatbotService {
@@ -24,6 +25,7 @@ export class ChatbotService {
     private readonly queryPlannerService: QueryPlannerService,
     private readonly contentModerationService: ContentModerationService,
     private readonly responseFormatterService: ResponseFormatterService,
+    private readonly teamsNotificationService: TeamsNotificationService,
   ) {}
 
   /**
@@ -39,6 +41,7 @@ export class ChatbotService {
     tenantId: string | undefined,
     message: string,
     sessionId: string,
+    notifyTeams = true,
   ) {
     this.logger.log(
       `Chat request from userId=${userId ?? 'anonymous'}, sessionId=${sessionId}`,
@@ -166,6 +169,16 @@ export class ChatbotService {
     // ──────────────────────────────────────────────
     const formatted = this.responseFormatterService.format(answer);
 
+    // 👇 Send to Teams
+    const teamsNotification = notifyTeams
+      ? await this.teamsNotificationService.sendMessage({
+          userId,
+          sessionId,
+          question: message,
+          answer: formatted,
+        })
+      : { sent: false, reason: 'not_requested' };
+
     // ──────────────────────────────────────────────
     // 8. Save assistant response to conversation history
     // ──────────────────────────────────────────────
@@ -184,6 +197,7 @@ export class ChatbotService {
       meta: {
         containersQueried: knowledge.map((k) => k.container),
         totalRecords: knowledge.reduce((sum, k) => sum + k.count, 0),
+        teamsNotification,
       },
     };
   }
