@@ -7,6 +7,9 @@ import {
 @Injectable()
 export class BotAdapter extends CloudAdapter {
   constructor() {
+    console.log('APP ID:', process.env.MICROSOFT_APP_ID);
+    console.log('TENANT:', process.env.MICROSOFT_APP_TENANT_ID);
+    console.log('PASSWORD EXISTS:', !!process.env.MICROSOFT_APP_PASSWORD);
     const botFrameworkAuthentication =
       new ConfigurationBotFrameworkAuthentication({
         MicrosoftAppId: process.env.MICROSOFT_APP_ID!,
