@@ -1,19 +1,23 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ActivityHandler, TurnContext } from 'botbuilder';
 import { BotService } from './bot.service';
-import { TeamsNotificationService } from './teams-notification.service';
+import { TeamsNotificationService } from '../chatbot/services/teams-notification.service';
+import { ConversationRepository } from '../chatbot/repositories/conversation.repository';
+import { WebsiteRealtimeService } from '../chatbot/services/website-realtime.service';
 
 @Injectable()
 export class TeamsBot extends ActivityHandler {
+  private readonly logger = new Logger(TeamsBot.name);
+
   constructor(
     private readonly botService: BotService,
     private readonly notificationService: TeamsNotificationService,
+    private readonly conversationRepository: ConversationRepository,
+    private readonly websiteRealtimeService: WebsiteRealtimeService,
   ) {
     super();
 
     // Teams sends this event when the bot is installed or added to a chat/team.
-    // Capture it so proactive notifications can be sent without requiring the
-    // user to first type a normal message.
     this.onMembersAdded(async (context, next) => {
       this.notificationService.saveConversationReference(
         TurnContext.getConversationReference(context.activity),
@@ -24,21 +28,53 @@ export class TeamsBot extends ActivityHandler {
     this.onMessage(async (context: TurnContext, next) => {
       TurnContext.removeRecipientMention(context.activity);
 
+      // Save conversation reference for proactive updates
       this.notificationService.saveConversationReference(
         TurnContext.getConversationReference(context.activity),
       );
 
       const message = context.activity.text?.trim() ?? '';
+      const replyToId = context.activity.replyToId;
+      
+      const websiteConversationId = replyToId 
+        ? this.notificationService.getWebsiteConversationId(replyToId)
+        : undefined;
 
-      console.log('Teams Message:', message);
+      if (websiteConversationId) {
+        this.logger.log(`Intercepted Live Agent reply to Website conversationId=${websiteConversationId}`);
+        
+        const timestamp = new Date().toISOString();
+        const agentRecord = {
+          conversationId: websiteConversationId,
+          userId: context.activity.from?.id ?? 'teams-agent',
+          question: '', // It's an answer from the agent
+          answer: message,
+          source: 'Teams' as const,
+          channel: 'Website' as const, // Destination channel
+          timestamp,
+        };
 
-      const result = await this.botService.processMessage(message);
+        // Save to DB and push to Website in real-time
+        await this.conversationRepository.saveConversation(agentRecord);
+        this.websiteRealtimeService.notifyWebsiteClients(agentRecord);
 
-      console.log('AI Response:', result.response);
+        // Acknowledge in Teams
+        await context.sendActivity('✅ Reply sent to website user.');
+      } else {
+        const conversationId = context.activity.conversation?.id ?? 'teams-default-session';
+        const userId = context.activity.from?.id ?? 'teams-user';
 
-      await context.sendActivity(
-        result.response ?? 'Sorry, I could not generate a response.',
-      );
+        this.logger.log(`Incoming Teams Message: "${message}" from userId=${userId}, convId=${conversationId}`);
+
+        // Delegate processing to ChatbotService via BotService with channel='Teams'
+        const result = await this.botService.processMessage(message, conversationId, userId);
+
+        this.logger.log(`Teams AI Response generated: "${result.response.substring(0, 50)}..."`);
+
+        await context.sendActivity(
+          result.response ?? 'Sorry, I could not generate a response.',
+        );
+      }
 
       await next();
     });

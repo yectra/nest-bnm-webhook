@@ -1,43 +1,69 @@
-import { Body, Controller, Post, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { Body, Controller, Get, Logger, Param, Post, UseGuards } from '@nestjs/common';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ChatbotService } from './chatbot.service';
-import { ChatDto } from './dto/chat.dto';
+import { ChatMessageDto } from './dto/chat-message.dto';
 import { Public } from '../../common/decorators/public.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { ConversationRepository } from './repositories/conversation.repository';
 
 @ApiTags('chatbot')
 @Controller('chatbot')
 export class ChatbotController {
-  constructor(private readonly chatbotService: ChatbotService) {}
+  private readonly logger = new Logger(ChatbotController.name);
+
+  constructor(
+    private readonly chatbotService: ChatbotService,
+    private readonly conversationRepository: ConversationRepository,
+  ) {}
 
   @Public()
   @Post()
   @ApiOperation({
-    summary: 'Send a message to the AI chat assistant',
+    summary: 'Send a message to the AI Chatbot backend (Website Chat UI)',
     description:
-      'Answers questions using data from the provided message and optional session. Authorization is optional; this endpoint is public and does not require a Bearer JWT token.',
+      'Processes a message through the single ChatbotService orchestrator, runs vector search, generates AI response, stores conversation, and synchronizes real-time channels.',
   })
-  async chat(@Body() dto: ChatDto) {
-    const sessionId = dto.sessionId ?? 'anonymous-session';
-
-    return this.chatbotService.chat(null, undefined, dto.message, sessionId);
+  async chat(@Body() dto: ChatMessageDto) {
+    this.logger.log(`Received POST /api/chatbot request: ${JSON.stringify(dto)}`);
+    return this.chatbotService.processMessage({
+      ...dto,
+      channel: dto.channel || 'Website',
+    });
   }
 
-  // Authenticated endpoint – requires JWT and provides user context
   @UseGuards(JwtAuthGuard)
   @Post('auth')
   @ApiOperation({
-    summary: 'Authenticated chat endpoint',
+    summary: 'Authenticated chat endpoint for Website Chat UI',
     description:
-      'Chat endpoint that requires a valid Bearer JWT token. The token is decoded by JwtAuthGuard and the user information is injected via @CurrentUser. Provides userId and optional tenantId to the service for RBAC enforcement.',
+      'Requires Bearer JWT token. Injects user ID context from JWT token into ChatbotService.',
   })
   async chatAuth(
-    @Body() dto: ChatDto,
+    @Body() dto: ChatMessageDto,
     @CurrentUser('sub') userId: string,
     @CurrentUser('tid') tenantId?: string,
   ) {
-    const sessionId = dto.sessionId ?? `session-${userId}`;
-    return this.chatbotService.chat(userId, tenantId, dto.message, sessionId);
+    this.logger.log(`Received authenticated POST /api/chatbot/auth for userId=${userId}`);
+    return this.chatbotService.processMessage({
+      ...dto,
+      userId,
+      tenantId,
+      channel: dto.channel || 'Website',
+    });
+  }
+
+  @Public()
+  @Get('history/:conversationId')
+  @ApiOperation({
+    summary: 'Get conversation history for both Website and Teams',
+    description: 'Retrieves unified conversation history stored for a given conversationId.',
+  })
+  getHistory(@Param('conversationId') conversationId: string) {
+    return {
+      success: true,
+      conversationId,
+      history: this.conversationRepository.getHistory(conversationId),
+    };
   }
 }

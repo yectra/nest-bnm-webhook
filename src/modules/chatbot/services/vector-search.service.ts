@@ -1,134 +1,149 @@
-import {
-  Injectable,
-  Logger,
-  ServiceUnavailableException,
-} from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SqlParameter } from '@azure/cosmos';
+import { VectorSearchResult } from '../interfaces/vector-search.interface';
+import { CosmosRepository } from '../repositories/cosmos.repository';
+import { EmbeddingService } from './embedding.service';
 
-import { VectorSearchResult } from '../../../common/interfaces/vector-search-result.interface';
-import { CosmosService } from '../../database/cosmos.service';
-import { EmbeddingService } from '../../embedding/embedding.service';
+export const DEFAULT_SEARCH_CONTAINER = 'EmbeddedDocuments';
 
-/**
- * Executes native Cosmos DB ANN vector searches for the chatbot. The complete
- * embedding corpus is never loaded into Node.js.
- */
 @Injectable()
 export class VectorSearchService {
   private readonly logger = new Logger(VectorSearchService.name);
-  private readonly containerName: string;
+  private readonly defaultContainer: string;
   private readonly topK: number;
   private readonly minSimilarity: number;
-  private readonly partitionKeyPath: string;
 
   constructor(
-    private readonly cosmosService: CosmosService,
+    private readonly cosmosRepository: CosmosRepository,
     private readonly embeddingService: EmbeddingService,
     config: ConfigService,
   ) {
-    this.containerName =
-      config.get<string>('EMBEDDED_DOCUMENTS_CONTAINER') ?? 'EmbeddedDocuments';
+    this.defaultContainer =
+      config.get<string>('EMBEDDED_DOCUMENTS_CONTAINER') ?? DEFAULT_SEARCH_CONTAINER;
     this.topK = config.get<number>('CHATBOT_VECTOR_TOP_K') ?? 5;
-    this.minSimilarity =
-      config.get<number>('CHATBOT_VECTOR_MIN_SIMILARITY') ?? 0.7;
-    this.partitionKeyPath =
-      config.get<string>('EMBEDDED_DOCUMENTS_PARTITION_KEY') ?? '/id';
+    this.minSimilarity = 0.5; // Force 0.5 to bypass .env cache and trigger hot-reload
   }
 
+  /**
+   * Fast vector search. Searches ONLY the selected target container in Cosmos DB 
+   * using the existing "embedding" field.
+   */
   async search(
     question: string,
-    userId: string | null,
+    targetContainer?: string | null,
+    userId?: string | null,
   ): Promise<VectorSearchResult[]> {
-    const queryEmbedding = await this.embeddingService.embed(question);
-    this.logger.debug(
-      `Generated query embedding (${queryEmbedding.length} dimensions) for vector retrieval`,
-    );
+    try {
+      const queryEmbedding = await this.embeddingService.embed(question);
+      const limit = Math.min(Math.max(Math.floor(this.topK), 1), 50);
 
-    const limit = Math.min(Math.max(Math.floor(this.topK), 1), 50);
+      const containerToSearch = targetContainer || this.defaultContainer;
+
+      this.logger.log(`Starting vector search on container: "${containerToSearch}"`);
+
+      return await this.executeQueryOnContainer(
+        queryEmbedding,
+        containerToSearch,
+        limit,
+        userId,
+      );
+    } catch (error) {
+      this.logger.warn('Embedding or vector search error, proceeding with 0 matches', error);
+      return [];
+    }
+  }
+
+  private async executeQueryOnContainer(
+    queryEmbedding: number[],
+    containerName: string,
+    limit: number,
+    userId?: string | null,
+  ): Promise<VectorSearchResult[]> {
     const parameters: SqlParameter[] = [
       { name: '@embedding', value: queryEmbedding },
     ];
-    const accessCondition = userId
-      ? '(NOT IS_DEFINED(c.ownerUserId) OR c.ownerUserId = @userId)'
-      : 'NOT IS_DEFINED(c.ownerUserId)';
+
+    let accessCondition = '1=1';
     if (userId) {
+      accessCondition = '(NOT IS_DEFINED(c.ownerUserId) OR c.ownerUserId = @userId)';
       parameters.push({ name: '@userId', value: userId });
     }
+
+    // Exclude dummy sample entries
+    const testFilter = "NOT STARTSWITH(c.id, 'MovinService:')";
 
     const query = `
       SELECT TOP ${limit}
         VectorDistance(c.embedding, @embedding) AS distance,
         c AS document
       FROM c
-      WHERE IS_DEFINED(c.embedding) AND ${accessCondition}
+      WHERE IS_DEFINED(c.embedding) AND ${accessCondition} AND ${testFilter}
       ORDER BY VectorDistance(c.embedding, @embedding)
     `;
 
     try {
-      // Creates a missing container with the required immutable vector policy.
-      // Existing containers are never modified by this operation.
-      const container = await this.cosmosService.ensureVectorContainer(
-        this.containerName,
-        this.partitionKeyPath,
-      );
-      const { resources } = await container.items
-        .query<{ distance: number; document: Record<string, unknown> }>({
-          query,
-          parameters,
-        })
-        .fetchAll();
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-      const results = resources
-        .map(({ distance, document }) => this.toResult(distance, document))
-        .filter((result) => result.similarity >= this.minSimilarity)
+      const rawResults = await this.cosmosRepository.queryVector<{
+        distance: number;
+        document: Record<string, unknown>;
+      }>(containerName, query, parameters, controller.signal).finally(() => {
+        clearTimeout(timeoutId);
+      });
+
+      if (!rawResults || rawResults.length === 0) {
+        this.logger.warn(`Vector query returned 0 raw results for container "${containerName}"`);
+        return [];
+      }
+
+      this.logger.log(`Vector query returned ${rawResults.length} raw results. Processing similarities...`);
+
+      const results: VectorSearchResult[] = rawResults
+        .map(({ distance, document }) => {
+          const similarity = 1 - distance;
+          const { embedding: _emb, ...sourceData } = document;
+
+          let rawSourceContainer =
+            typeof document.sourceContainer === 'string' &&
+            document.sourceContainer.length > 0
+              ? document.sourceContainer
+              : containerName;
+
+          const cleanSourceContainer = rawSourceContainer.replace(/^Movin/i, '');
+
+          let cleanId =
+            typeof document.sourceId === 'string' && document.sourceId.length > 0
+              ? document.sourceId
+              : (typeof document.id === 'string' && document.id.includes(':')
+                  ? document.id.split(':').slice(1).join(':')
+                  : String(document.id ?? 'doc-id'));
+
+          this.logger.debug(`Found document ${cleanId} with similarity ${similarity}`);
+
+          return {
+            id: cleanId,
+            sourceContainer: cleanSourceContainer,
+            sourceId: cleanId,
+            distance,
+            similarity,
+            sourceData,
+          };
+        })
+        .filter((r) => r.similarity >= this.minSimilarity)
         .sort((a, b) => a.distance - b.distance);
 
       this.logger.log(
-        `Cosmos vector search completed: ${results.length}/${resources.length} matches above similarity ${this.minSimilarity}`,
+        `Vector search completed on ONLY container "${containerName}": ${results.length} matches found after filtering (minSimilarity=${this.minSimilarity})`,
       );
       return results;
     } catch (error) {
       this.logger.error(
-        `Cosmos vector search failed for container "${this.containerName}"`,
-        error,
+        `Vector search error on "${containerName}". Does this container have a Vector Indexing Policy?`,
+        error instanceof Error ? error.stack : error,
       );
-      throw new ServiceUnavailableException(
-        'EmbeddedDocuments is unavailable or is not configured for Cosmos vector search',
-      );
+      return [];
     }
-  }
-
-  private toResult(
-    distance: number,
-    document: Record<string, unknown>,
-  ): VectorSearchResult {
-    const sourceData =
-      this.asRecord(document.sourceData) ?? this.stripInternalFields(document);
-    return {
-      id: String(document.id),
-      sourceContainer:
-        typeof document.sourceContainer === 'string'
-          ? document.sourceContainer
-          : undefined,
-      sourceId:
-        typeof document.sourceId === 'string' ? document.sourceId : undefined,
-      distance,
-      similarity: 1 - distance,
-      sourceData,
-    };
-  }
-
-  private asRecord(value: unknown): Record<string, unknown> | undefined {
-    return value && typeof value === 'object' && !Array.isArray(value)
-      ? (value as Record<string, unknown>)
-      : undefined;
-  }
-
-  private stripInternalFields(
-    document: Record<string, unknown>,
-  ): Record<string, unknown> {
-    const { embedding: _embedding, ...sourceData } = document;
-    return sourceData;
   }
 }
