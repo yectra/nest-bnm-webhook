@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { CardFactory, ConversationReference } from 'botbuilder';
 import { BotAdapter } from '../../bot/bot.adapter';
+import { CosmosRepository } from '../repositories/cosmos.repository';
+import { TeamsFormattingUtil } from '../../bot/utils/teams-formatting.util';
 
 export interface TeamsNotificationResult {
   sent: boolean;
@@ -12,13 +14,44 @@ export class TeamsNotificationService {
   private readonly logger = new Logger(TeamsNotificationService.name);
   private conversationReference?: Partial<ConversationReference>;
   private readonly messageToWebsiteMap = new Map<string, string>();
+  private readonly containerName = 'TeamsConfig';
+  private readonly referenceId = 'proactive-reference';
 
-  constructor(private readonly adapter: BotAdapter) {}
+  constructor(
+    private readonly adapter: BotAdapter,
+    private readonly cosmosRepository: CosmosRepository,
+  ) {}
 
   /** Save conversation reference when user messages bot in Teams or bot is added */
   saveConversationReference(reference: Partial<ConversationReference>): void {
     this.conversationReference = reference;
-    this.logger.log('Teams conversation reference saved');
+    this.logger.log('Teams conversation reference saved to memory');
+    
+    // Fire-and-forget saving to Cosmos DB
+    void this.cosmosRepository.saveItem(this.containerName, {
+      id: this.referenceId,
+      reference,
+    }).catch(err => {
+      this.logger.error('Failed to persist Teams conversation reference to Cosmos DB', err);
+    });
+  }
+
+  /** Try to reload conversation reference from Cosmos DB if memory is wiped */
+  async loadConversationReference(): Promise<void> {
+    if (this.conversationReference) return;
+
+    try {
+      const data = await this.cosmosRepository.getItem<{ id: string; reference: Partial<ConversationReference> }>(
+        this.containerName,
+        this.referenceId,
+      );
+      if (data?.reference) {
+        this.conversationReference = data.reference;
+        this.logger.log('Teams conversation reference reloaded from Cosmos DB');
+      }
+    } catch (error) {
+      this.logger.error('Error reloading Teams conversation reference from Cosmos DB', error);
+    }
   }
 
   /** Get active conversation reference */
@@ -38,6 +71,8 @@ export class TeamsNotificationService {
     conversationId: string;
     userId?: string;
   }): Promise<TeamsNotificationResult> {
+    await this.loadConversationReference();
+
     if (!this.conversationReference) {
       this.logger.warn(
         'Teams proactive message skipped: No active conversation reference available.',
@@ -51,10 +86,7 @@ export class TeamsNotificationService {
         appId,
         this.conversationReference,
         async (context) => {
-          const card = CardFactory.heroCard(
-            '🤖 AI Chatbot Synchronized Message',
-            `**Question:**\n${data.question}\n\n**Answer:**\n${data.answer}`,
-          );
+          const card = TeamsFormattingUtil.formatProactiveMessage(data.question, data.answer);
 
           const response = await context.sendActivity({
             attachments: [card],

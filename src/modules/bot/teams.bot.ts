@@ -4,6 +4,7 @@ import { BotService } from './bot.service';
 import { TeamsNotificationService } from '../chatbot/services/teams-notification.service';
 import { ConversationRepository } from '../chatbot/repositories/conversation.repository';
 import { WebsiteRealtimeService } from '../chatbot/services/website-realtime.service';
+import { TeamsFormattingUtil } from './utils/teams-formatting.util';
 
 @Injectable()
 export class TeamsBot extends ActivityHandler {
@@ -19,6 +20,20 @@ export class TeamsBot extends ActivityHandler {
 
     // Teams sends this event when the bot is installed or added to a chat/team.
     this.onMembersAdded(async (context, next) => {
+      this.notificationService.saveConversationReference(
+        TurnContext.getConversationReference(context.activity),
+      );
+      await next();
+    });
+
+    this.onConversationUpdate(async (context, next) => {
+      this.notificationService.saveConversationReference(
+        TurnContext.getConversationReference(context.activity),
+      );
+      await next();
+    });
+
+    this.onInstallationUpdate(async (context, next) => {
       this.notificationService.saveConversationReference(
         TurnContext.getConversationReference(context.activity),
       );
@@ -71,9 +86,13 @@ export class TeamsBot extends ActivityHandler {
 
         this.logger.log(`Teams AI Response generated: "${result.response.substring(0, 50)}..."`);
 
-        await context.sendActivity(
+        const formattedAttachment = TeamsFormattingUtil.formatResponseToAdaptiveCard(
           result.response ?? 'Sorry, I could not generate a response.',
         );
+
+        await context.sendActivity({
+          attachments: [formattedAttachment],
+        });
       }
 
       await next();
