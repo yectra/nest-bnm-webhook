@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { CardFactory, ConversationReference } from 'botbuilder';
 
 import { BotAdapter } from './bot.adapter';
+import { ResponseFormatterService } from './response-formatter-service';
 
 export interface TeamsNotificationResult {
   sent: boolean;
@@ -13,7 +14,10 @@ export class TeamsNotificationService {
   private readonly logger = new Logger(TeamsNotificationService.name);
   private conversationReference?: Partial<ConversationReference>;
 
-  constructor(private readonly adapter: BotAdapter) {}
+  constructor(
+    private readonly adapter: BotAdapter,
+    private readonly responseFormatterService: ResponseFormatterService,
+  ) {}
 
   /** Called after a user has contacted the bot in Teams. */
   saveConversationReference(reference: Partial<ConversationReference>) {
@@ -40,11 +44,17 @@ export class TeamsNotificationService {
         process.env.MICROSOFT_APP_ID!,
         this.conversationReference,
         async (context) => {
+          const formatted = this.responseFormatterService.format(data.answer);
+
           const card = CardFactory.heroCard(
-            'AI Chat Activity',
-            `Question:\n${data.question}\n\nAnswer:\n${data.answer}`,
+            '🤖 AI Chat Activity',
+            [`Question:\n${data.question}`, '', `Answer:\n${formatted}`].join(
+              '\n',
+            ),
           );
-          await context.sendActivity({ attachments: [card] });
+          await context.sendActivity({
+            attachments: [card],
+          });
         },
       );
       this.logger.log('Teams proactive notification delivered');

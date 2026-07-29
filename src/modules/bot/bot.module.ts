@@ -5,6 +5,7 @@ import { BotAdapter } from './bot.adapter';
 import { TeamsBot } from './teams.bot';
 import { TeamsNotificationService } from './teams-notification.service';
 import { ChatbotModule } from '../chatbot/chatbot.module';
+import { ResponseFormatterService } from './response-formatter-service';
 
 /**
  * BotModule encapsulates all bot‑related providers. It no longer imports the
@@ -16,7 +17,13 @@ import { ChatbotModule } from '../chatbot/chatbot.module';
 @Module({
   imports: [forwardRef(() => ChatbotModule)],
   controllers: [BotController],
-  providers: [BotService, BotAdapter, TeamsBot, TeamsNotificationService],
+  providers: [
+    BotService,
+    BotAdapter,
+    TeamsBot,
+    TeamsNotificationService,
+    ResponseFormatterService,
+  ],
   exports: [BotAdapter, TeamsNotificationService],
 })
 export class BotModule {}
