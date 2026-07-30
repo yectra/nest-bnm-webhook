@@ -86,8 +86,12 @@ export class TeamsBot extends ActivityHandler {
         await this.conversationRepository.saveConversation(agentRecord);
         this.websiteRealtimeService.notifyWebsiteClients(agentRecord);
 
-        // Acknowledge in Teams
-        await context.sendActivity('✅ Reply sent to website user.');
+        // Acknowledge in Teams safely
+        try {
+          await context.sendActivity('✅ Reply sent to website user.');
+        } catch (err) {
+          this.logger.warn('Could not send activity acknowledgment in channel:', err);
+        }
       } else {
         const conversationId = context.activity.conversation?.id ?? 'teams-default-session';
         const userId = context.activity.from?.id ?? 'teams-user';
@@ -103,9 +107,13 @@ export class TeamsBot extends ActivityHandler {
           result.response ?? 'Sorry, I could not generate a response.',
         );
 
-        await context.sendActivity({
-          attachments: [formattedAttachment],
-        });
+        try {
+          await context.sendActivity({
+            attachments: [formattedAttachment],
+          });
+        } catch (err) {
+          this.logger.error('Failed to send activity response:', err);
+        }
       }
 
       await next();
