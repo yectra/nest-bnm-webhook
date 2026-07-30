@@ -36,6 +36,12 @@ export class TeamsNotificationService {
 
   /** Save conversation reference when user messages bot in Teams or bot is added */
   saveConversationReference(reference: Partial<ConversationReference>): void {
+    if (reference.channelId && reference.channelId !== 'msteams') {
+      this.logger.warn(
+        `Skipping conversation reference save for non-Teams channel: '${reference.channelId}'`,
+      );
+      return;
+    }
     this.conversationReference = reference;
     this.logger.log('Teams conversation reference saved to memory');
     this.persistState();
