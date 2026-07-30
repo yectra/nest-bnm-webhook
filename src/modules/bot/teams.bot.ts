@@ -43,6 +43,9 @@ export class TeamsBot extends ActivityHandler {
     this.onMessage(async (context: TurnContext, next) => {
       TurnContext.removeRecipientMention(context.activity);
 
+      // Ensure state is loaded from Cosmos DB if server restarted
+      await this.notificationService.loadConversationReference();
+
       // Save conversation reference for proactive updates
       this.notificationService.saveConversationReference(
         TurnContext.getConversationReference(context.activity),
@@ -54,9 +57,11 @@ export class TeamsBot extends ActivityHandler {
 
       const message = context.activity.text?.trim() ?? '';
       const replyToId = context.activity.replyToId;
-
-      let websiteConversationId = replyToId
-        ? this.notificationService.getWebsiteConversationId(replyToId)
+      const cleanReplyToId = replyToId ? replyToId.split('|')[0] : undefined;
+      
+      let websiteConversationId = replyToId 
+        ? (this.notificationService.getWebsiteConversationId(replyToId) ||
+           (cleanReplyToId ? this.notificationService.getWebsiteConversationId(cleanReplyToId) : undefined))
         : undefined;
 
       // Fallback: If they didn't reply to a specific message, route to the active conversation
@@ -65,7 +70,7 @@ export class TeamsBot extends ActivityHandler {
       }
 
       const mapKeys = this.notificationService.getMapKeys().join(', ');
-      this.logger.log(`[DEBUG] Incoming Teams Message. replyToId=${replyToId}. Mapped websiteConversationId=${websiteConversationId}. Known Map Keys: [${mapKeys}]`);
+      this.logger.log(`[DEBUG] Incoming Teams Message. replyToId=${replyToId} (clean=${cleanReplyToId}). Mapped websiteConversationId=${websiteConversationId}. Known Map Keys: [${mapKeys}]`);
 
       if (websiteConversationId) {
         this.logger.log(`Intercepted Live Agent reply to Website conversationId=${websiteConversationId}`);
