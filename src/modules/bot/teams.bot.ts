@@ -48,10 +48,14 @@ export class TeamsBot extends ActivityHandler {
         TurnContext.getConversationReference(context.activity),
       );
 
+      // Reload persisted state from Cosmos DB so the conversation map and
+      // activeWebsiteConversationId are available even after a server restart.
+      await this.notificationService.loadConversationReference();
+
       const message = context.activity.text?.trim() ?? '';
       const replyToId = context.activity.replyToId;
-      
-      let websiteConversationId = replyToId 
+
+      let websiteConversationId = replyToId
         ? this.notificationService.getWebsiteConversationId(replyToId)
         : undefined;
 
