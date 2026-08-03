@@ -4,6 +4,10 @@ import { AgentCrewController } from './agent-crew.controller';
 import { AgentCrewService } from './agent-crew.service';
 import { AgentCrewGateway } from './agent-crew.gateway';
 import { CrewGraphFactory } from './graph/crew-graph.factory';
+import {
+  CREW_AGENTS,
+  CrewAgentDefinition,
+} from './graph/crew-agent.definition';
 import { CrewLlmProvider } from './services/crew-llm.provider';
 import { SupervisorAgentService } from './services/supervisor-agent.service';
 import { ServiceVectorAgentService } from './services/service-vector-agent.service';
@@ -18,10 +22,22 @@ import { CrewDispatchService } from './services/crew-dispatch.service';
   controllers: [AgentCrewController],
   providers: [
     CrewLlmProvider,
-    SupervisorAgentService,
     ServiceVectorAgentService,
     QuoteAgentService,
     ImageAgentService,
+    // Retrieval-agent registry: the graph nodes, supervisor prompt, and
+    // routing are all derived from this array. To add a crew member,
+    // implement CrewAgentDefinition and append it here — nothing else.
+    {
+      provide: CREW_AGENTS,
+      useFactory: (
+        services: ServiceVectorAgentService,
+        quotes: QuoteAgentService,
+        images: ImageAgentService,
+      ): CrewAgentDefinition[] => [services, quotes, images],
+      inject: [ServiceVectorAgentService, QuoteAgentService, ImageAgentService],
+    },
+    SupervisorAgentService,
     SynthesizerAgentService,
     PiiFilterService,
     CrewDispatchService,

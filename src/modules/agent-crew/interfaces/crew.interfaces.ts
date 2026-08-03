@@ -1,10 +1,13 @@
 import { VectorSearchResult } from '../../chatbot/interfaces/vector-search.interface';
 
-/** Which specialist agents the supervisor decided to activate for a request. */
+/**
+ * Which specialist agents the supervisor decided to activate for a request.
+ * Keys of `agents` are the registered CrewAgentDefinition planKeys
+ * (e.g. useServices, useQuotes, useImages), so the plan grows with the
+ * registry instead of being hardcoded.
+ */
 export interface CrewPlan {
-  useServices: boolean;
-  useQuotes: boolean;
-  useImages: boolean;
+  agents: Record<string, boolean>;
   rationale: string;
 }
 

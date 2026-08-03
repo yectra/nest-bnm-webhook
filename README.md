@@ -137,6 +137,17 @@ Foundry and Cosmos DB vector search:
 The retrieval agents selected by the supervisor run in parallel and fan back
 in at the synthesizer.
 
+The orchestrator is registry-driven: each retrieval agent implements
+`CrewAgentDefinition` (node name, plan flag, planning hint, enable switch,
+keyword heuristic, and the node body) and is registered under the
+`CREW_AGENTS` token in `agent-crew.module.ts`. The graph nodes, supervisor
+planning prompt, and routing are all derived from that registry, so adding a
+crew member is one class plus one registry entry — the graph factory,
+supervisor, and prompts never change. The tail
+(`synthesize -> piiFilter -> dispatchAgent`) is deliberately fixed so no
+answer can skip PII filtering. Backbone prompts live in
+`src/modules/agent-crew/prompts/crew.prompts.ts`.
+
 WebSocket usage (Socket.IO):
 
 ```js

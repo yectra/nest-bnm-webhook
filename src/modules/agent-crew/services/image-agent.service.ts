@@ -4,6 +4,12 @@ import { SqlParameter } from '@azure/cosmos';
 import { CosmosRepository } from '../../chatbot/repositories/cosmos.repository';
 import { CrewLlmProvider } from './crew-llm.provider';
 import { CrewImageInsight } from '../interfaces/crew.interfaces';
+import { CrewAgentDefinition } from '../graph/crew-agent.definition';
+import { CrewState, traceEntry } from '../graph/crew-state';
+import { buildImageAnalysisPrompt } from '../prompts/crew.prompts';
+
+const IMAGE_KEYWORDS =
+  /\b(picture|pictures|photo|photos|image|images|attachment|attachments|drawing|drawings|screenshot|requirement form|post your requirements?)\b/i;
 
 const IMAGE_FIELD_NAMES = [
   'images',
@@ -29,11 +35,19 @@ interface DiscoveredImage {
  * Post Your Requirements documents, then summarizes each with GPT-5 vision.
  */
 @Injectable()
-export class ImageAgentService {
+export class ImageAgentService implements CrewAgentDefinition {
+  readonly name = 'imageAgent';
+  readonly planKey = 'useImages';
+  readonly planningHint =
+    'analyze pictures attached to quotes or Post Your Requirements forms; ' +
+    'true when the question mentions pictures, photos, images, attachments, ' +
+    'or drawings';
+
   private readonly logger = new Logger(ImageAgentService.name);
   private readonly quoteContainer: string;
   private readonly requirementsContainer: string;
   private readonly maxImages: number;
+  private readonly isEnabled: boolean;
 
   constructor(
     private readonly cosmosRepository: CosmosRepository,
@@ -46,6 +60,30 @@ export class ImageAgentService {
       config.get<string>('AGENT_CREW_REQUIREMENTS_CONTAINER') ??
       'PostYourRequirements';
     this.maxImages = config.get<number>('AGENT_CREW_MAX_IMAGES') ?? 4;
+    const flag = config.get<boolean | string>('AGENT_CREW_IMAGE_AGENT_ENABLED');
+    this.isEnabled = flag === true || flag === 'true';
+  }
+
+  /** Picture analysis is opt-in: off unless AGENT_CREW_IMAGE_AGENT_ENABLED=true. */
+  enabled(): boolean {
+    return this.isEnabled;
+  }
+
+  planHeuristic(question: string): boolean {
+    return IMAGE_KEYWORDS.test(question);
+  }
+
+  async run(state: CrewState): Promise<Partial<CrewState>> {
+    const imageInsights = await this.analyze(state.question, state.userId);
+    return {
+      imageInsights,
+      trace: [
+        traceEntry(
+          this.name,
+          `analyzed ${imageInsights.length} attached pictures`,
+        ),
+      ],
+    };
   }
 
   async analyze(
@@ -69,10 +107,7 @@ export class ImageAgentService {
       limited.map(async (image) => {
         try {
           const summary = await this.llm.describeImage(
-            `You are analyzing a picture a customer attached to a ${image.sourceContainer} document ` +
-              `on a home-services marketplace. Describe the requirement or work shown, focusing on ` +
-              `details relevant to this question: "${question}". Do not mention any personal ` +
-              `information visible in the image (faces, names, addresses, phone numbers, documents).`,
+            buildImageAnalysisPrompt(image.sourceContainer, question),
             image.url,
           );
           if (!summary) {

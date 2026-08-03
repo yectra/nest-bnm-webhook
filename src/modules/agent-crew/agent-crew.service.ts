@@ -85,12 +85,7 @@ export class AgentCrewService implements OnModuleInit {
       channel,
       timestamp,
       meta: {
-        plan: finalState.plan ?? {
-          useServices: true,
-          useQuotes: false,
-          useImages: false,
-          rationale: 'default',
-        },
+        plan: finalState.plan ?? { agents: {}, rationale: 'default' },
         serviceMatches: finalState.serviceMatches.length,
         quoteMatches: finalState.quoteMatches.length,
         imagesAnalyzed: finalState.imageInsights.length,

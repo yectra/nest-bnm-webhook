@@ -4,6 +4,11 @@ import { SqlParameter } from '@azure/cosmos';
 import { CosmosRepository } from '../../chatbot/repositories/cosmos.repository';
 import { VectorSearchService } from '../../chatbot/services/vector-search.service';
 import { VectorSearchResult } from '../../chatbot/interfaces/vector-search.interface';
+import { CrewAgentDefinition } from '../graph/crew-agent.definition';
+import { CrewState, traceEntry } from '../graph/crew-state';
+
+const QUOTE_KEYWORDS =
+  /\b(quote|quotes|quotation|quotations|estimate|estimates|approval|approved|my request)\b/i;
 
 /**
  * Retrieval agent for the user's own quotes. Combines vector matches from the
@@ -11,7 +16,14 @@ import { VectorSearchResult } from '../../chatbot/interfaces/vector-search.inter
  * recent documents from the Quote container itself.
  */
 @Injectable()
-export class QuoteAgentService {
+export class QuoteAgentService implements CrewAgentDefinition {
+  readonly name = 'quoteAgent';
+  readonly planKey = 'useQuotes';
+  readonly planningHint =
+    "look up the user's own quotes / estimates; true when the question " +
+    'mentions quotes, quotations, estimates, approvals, pricing the user ' +
+    'requested, or "my" requests';
+
   private readonly logger = new Logger(QuoteAgentService.name);
   private readonly quoteContainer: string;
   private readonly topK: number;
@@ -24,6 +36,24 @@ export class QuoteAgentService {
     this.quoteContainer =
       config.get<string>('AGENT_CREW_QUOTE_CONTAINER') ?? 'Quote';
     this.topK = config.get<number>('AGENT_CREW_TOP_K') ?? 5;
+  }
+
+  enabled(): boolean {
+    return true;
+  }
+
+  planHeuristic(question: string): boolean {
+    return QUOTE_KEYWORDS.test(question);
+  }
+
+  async run(state: CrewState): Promise<Partial<CrewState>> {
+    const quoteMatches = await this.retrieve(state.question, state.userId);
+    return {
+      quoteMatches,
+      trace: [
+        traceEntry(this.name, `retrieved ${quoteMatches.length} quote records`),
+      ],
+    };
   }
 
   async retrieve(

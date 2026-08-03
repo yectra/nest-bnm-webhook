@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { CrewLlmProvider } from './crew-llm.provider';
 import { PiiRedactionResult } from '../interfaces/crew.interfaces';
+import { PII_REVIEW_SYSTEM_PROMPT } from '../prompts/crew.prompts';
 
 interface PiiRule {
   label: string;
@@ -48,13 +49,6 @@ const PII_RULES: PiiRule[] = [
     replacement: '[REDACTED ID]',
   },
 ];
-
-const PII_REVIEW_SYSTEM_PROMPT = `You are a strict PII redaction reviewer.
-Rewrite the given text replacing ANY remaining personal information (names of private individuals
-with contact context, emails, phone numbers, street addresses, government/payment ID numbers)
-with bracketed placeholders like [REDACTED PHONE]. Keep everything else EXACTLY as-is,
-including formatting. If nothing needs redaction, return the text unchanged.
-Return only the rewritten text with no commentary.`;
 
 /**
  * PII guardrail node: a deterministic regex pass always runs; an optional

@@ -2,12 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { CrewLlmProvider } from './crew-llm.provider';
 import { VectorSearchResult } from '../../chatbot/interfaces/vector-search.interface';
 import { CrewImageInsight } from '../interfaces/crew.interfaces';
-
-const SYNTHESIZER_SYSTEM_PROMPT = `You are the answer-writer for a home-services marketplace assistant.
-Compose a helpful, concise answer to the user's question using ONLY the retrieved context below.
-If the context does not contain the answer, say so clearly instead of inventing details.
-Never include personal contact details (emails, phone numbers, addresses, ID numbers) in your answer,
-even if they appear in the context.`;
+import { SYNTHESIZER_SYSTEM_PROMPT } from '../prompts/crew.prompts';
 
 @Injectable()
 export class SynthesizerAgentService {
