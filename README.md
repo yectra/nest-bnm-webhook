@@ -114,6 +114,42 @@ Configure chatbot retrieval with `CHATBOT_VECTOR_TOP_K` (default `5`) and
 keyword fallback: if native Cosmos vector search returns no result above the
 threshold, it responds with `No relevant information found.`
 
+## LangGraph agent crew
+
+`POST /api/agent-crew/chat` (and the Socket.IO namespace `api/agent-crew`)
+runs a LangGraph crew of agents backed by the GPT-5 deployment on Azure AI
+Foundry and Cosmos DB vector search:
+
+1. **Supervisor** (GPT-5) plans which retrieval agents to run.
+2. **Service vector agent** searches the service catalog vectors.
+3. **Quote agent** retrieves the user's quotes (vector matches plus most
+   recent quote documents).
+4. **Image agent** collects pictures attached to Quote and
+   Post Your Requirements documents and analyzes them with GPT-5 vision.
+5. **Synthesizer** (GPT-5) composes the answer from the retrieved context.
+6. **PII filter** redacts emails, phone numbers, card/ID numbers with a
+   deterministic regex pass plus an optional GPT-5 review pass
+   (`AGENT_CREW_PII_LLM_REVIEW=false` to disable).
+7. **Dispatcher** sends the filtered answer to the Microsoft Teams channel
+   (proactive card) and emits `crewResponse` to WebSocket clients.
+
+The retrieval agents selected by the supervisor run in parallel and fan back
+in at the synthesizer.
+
+WebSocket usage (Socket.IO):
+
+```js
+const socket = io('https://your-app/api/agent-crew');
+socket.emit('joinSession', { sessionId: 'conv-1' });
+socket.on('crewResponse', (payload) => console.log(payload));
+socket.emit('askCrew', { message: 'Find services matching the pictures on my quote', conversationId: 'conv-1', userId: 'user-789' });
+```
+
+Configuration: `AGENT_CREW_MODEL` (GPT-5 deployment name, defaults to
+`OPENAI_MODEL`), `AGENT_CREW_TOP_K`, `AGENT_CREW_MAX_IMAGES`,
+`AGENT_CREW_QUOTE_CONTAINER`, `AGENT_CREW_REQUIREMENTS_CONTAINER`,
+`AGENT_CREW_PII_LLM_REVIEW`.
+
 ## Twilio WhatsApp configuration
 
 In the Twilio console for your WhatsApp sender:

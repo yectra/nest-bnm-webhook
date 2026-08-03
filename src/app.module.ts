@@ -15,6 +15,7 @@ import { CosmosModule } from './modules/database/cosmos.module';
 import { BotModule } from './modules/bot/bot.module';
 import { EmbeddingModule } from './modules/embedding/embedding.module';
 import { SearchModule } from './modules/search/search.module';
+import { AgentCrewModule } from './modules/agent-crew/agent-crew.module';
 
 @Module({
   imports: [
@@ -59,6 +60,16 @@ import { SearchModule } from './modules/search/search.module';
           .pattern(/^\//)
           .default('/id'),
         CHATBOT_VECTOR_TOP_K: Joi.number().integer().min(1).max(50).default(5),
+        // Agent crew (LangGraph): GPT-5 deployment name on Azure AI Foundry.
+        // Falls back to OPENAI_MODEL when not set.
+        AGENT_CREW_MODEL: Joi.string().min(1).optional(),
+        AGENT_CREW_TOP_K: Joi.number().integer().min(1).max(50).default(5),
+        AGENT_CREW_MAX_IMAGES: Joi.number().integer().min(1).max(10).default(4),
+        AGENT_CREW_QUOTE_CONTAINER: Joi.string().min(1).default('Quote'),
+        AGENT_CREW_REQUIREMENTS_CONTAINER: Joi.string()
+          .min(1)
+          .default('PostYourRequirements'),
+        AGENT_CREW_PII_LLM_REVIEW: Joi.boolean().default(true),
         CHATBOT_VECTOR_MIN_SIMILARITY: Joi.number().min(-1).max(1).default(0.7),
         COSMOS_ENDPOINT: Joi.string().uri().required(),
         COSMOS_KEY: Joi.string().min(1).required(),
@@ -88,6 +99,8 @@ import { SearchModule } from './modules/search/search.module';
     EmbeddingModule,
 
     SearchModule,
+
+    AgentCrewModule,
   ],
 })
 export class AppModule {}
