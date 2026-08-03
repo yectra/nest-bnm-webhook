@@ -137,11 +137,17 @@ export class TeamsNotificationService {
     input: TeamsConversationResolutionInput,
   ): string | undefined {
     const { replyToId, teamsConversationId, fallbackConversationId } = input;
-    const cleanReplyToId = replyToId ? replyToId.split('|')[0] : undefined;
+    const candidates: string[] = [];
 
-    for (const candidate of [replyToId, cleanReplyToId].filter(
-      Boolean,
-    ) as string[]) {
+    if (replyToId) {
+      candidates.push(replyToId);
+      const splitPipe = replyToId.split('|')[0];
+      const splitSemicolon = replyToId.split(';')[0];
+      const splitBoth = splitPipe.split(';')[0];
+      candidates.push(splitPipe, splitSemicolon, splitBoth);
+    }
+
+    for (const candidate of candidates.filter(Boolean)) {
       const mapped = this.messageToWebsiteMap.get(candidate);
       if (mapped) {
         return mapped;
@@ -217,8 +223,9 @@ export class TeamsNotificationService {
               `[TeamsRelay] Teams card delivered. Teams message id=${response.id}, websiteConversationId=${data.conversationId}`,
             );
             this.messageToWebsiteMap.set(response.id, data.conversationId);
-            const cleanId = response.id.split('|')[0];
+            const cleanId = response.id.split('|')[0].split(';')[0];
             this.messageToWebsiteMap.set(cleanId, data.conversationId);
+            this.persistState();
           } else {
             this.logger.warn(
               `[TeamsRelay] Teams card send completed without a response id for conversationId=${data.conversationId}`,
