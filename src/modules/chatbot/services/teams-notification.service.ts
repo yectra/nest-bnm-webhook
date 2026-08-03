@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { CardFactory, ConversationReference } from 'botbuilder';
+import { ConversationReference } from 'botbuilder';
 import { BotAdapter } from '../../bot/bot.adapter';
 import { CosmosRepository } from '../repositories/cosmos.repository';
 import { TeamsFormattingUtil } from '../../bot/utils/teams-formatting.util';
@@ -9,11 +9,18 @@ export interface TeamsNotificationResult {
   reason?: 'no_conversation_reference' | 'delivery_failed';
 }
 
+export interface TeamsConversationResolutionInput {
+  replyToId?: string;
+  teamsConversationId?: string;
+  fallbackConversationId?: string;
+}
+
 @Injectable()
 export class TeamsNotificationService {
   private readonly logger = new Logger(TeamsNotificationService.name);
   private conversationReference?: Partial<ConversationReference>;
   private readonly messageToWebsiteMap = new Map<string, string>();
+  private readonly teamsConversationToWebsiteMap = new Map<string, string>();
   private activeWebsiteConversationId?: string;
   private readonly containerName = 'TeamsConfig';
   private readonly referenceId = 'proactive-reference';
@@ -24,14 +31,21 @@ export class TeamsNotificationService {
   ) {}
 
   private persistState(): void {
-    void this.cosmosRepository.saveItem(this.containerName, {
-      id: this.referenceId,
-      reference: this.conversationReference,
-      map: Array.from(this.messageToWebsiteMap.entries()),
-      activeWebsiteConversationId: this.activeWebsiteConversationId,
-    }).catch(err => {
-      this.logger.error('Failed to persist Teams state to Cosmos DB', err);
-    });
+    if (!this.cosmosRepository?.saveItem) {
+      return;
+    }
+
+    void this.cosmosRepository
+      .saveItem(this.containerName, {
+        id: this.referenceId,
+        reference: this.conversationReference,
+        map: Array.from(this.messageToWebsiteMap.entries()),
+        teamMap: Array.from(this.teamsConversationToWebsiteMap.entries()),
+        activeWebsiteConversationId: this.activeWebsiteConversationId,
+      })
+      .catch((err) => {
+        this.logger.error('Failed to persist Teams state to Cosmos DB', err);
+      });
   }
 
   /** Save conversation reference when user messages bot in Teams or bot is added */
@@ -49,18 +63,27 @@ export class TeamsNotificationService {
 
   /** Try to reload state from Cosmos DB if memory is wiped */
   async loadConversationReference(): Promise<void> {
-    if (this.conversationReference) return;
+    if (this.conversationReference && this.activeWebsiteConversationId) return;
+    if (!this.cosmosRepository?.getItem) return;
 
     try {
-      const data = await this.cosmosRepository.getItem<{ id: string; reference?: Partial<ConversationReference>; map?: [string, string][]; activeWebsiteConversationId?: string; }>(
-        this.containerName,
-        this.referenceId,
-      );
+      const data = await this.cosmosRepository.getItem<{
+        id: string;
+        reference?: Partial<ConversationReference>;
+        map?: [string, string][];
+        teamMap?: [string, string][];
+        activeWebsiteConversationId?: string;
+      }>(this.containerName, this.referenceId);
       if (data) {
         if (data.reference) this.conversationReference = data.reference;
         if (data.map) {
           for (const [k, v] of data.map) {
             this.messageToWebsiteMap.set(k, v);
+          }
+        }
+        if (data.teamMap) {
+          for (const [k, v] of data.teamMap) {
+            this.teamsConversationToWebsiteMap.set(k, v);
           }
         }
         if (data.activeWebsiteConversationId) {
@@ -69,7 +92,10 @@ export class TeamsNotificationService {
         this.logger.log('Teams state reloaded from Cosmos DB');
       }
     } catch (error) {
-      this.logger.error('Error reloading Teams conversation reference from Cosmos DB', error);
+      this.logger.error(
+        'Error reloading Teams conversation reference from Cosmos DB',
+        error,
+      );
     }
   }
 
@@ -87,6 +113,59 @@ export class TeamsNotificationService {
     return this.activeWebsiteConversationId;
   }
 
+  setActiveWebsiteConversationId(conversationId: string): void {
+    this.activeWebsiteConversationId = conversationId;
+    this.persistState();
+  }
+
+  registerConversationLink(
+    teamsConversationId: string,
+    websiteConversationId: string,
+  ): void {
+    if (!teamsConversationId || !websiteConversationId) {
+      return;
+    }
+
+    this.teamsConversationToWebsiteMap.set(
+      teamsConversationId,
+      websiteConversationId,
+    );
+    this.persistState();
+  }
+
+  resolveWebsiteConversationId(
+    input: TeamsConversationResolutionInput,
+  ): string | undefined {
+    const { replyToId, teamsConversationId, fallbackConversationId } = input;
+    const cleanReplyToId = replyToId ? replyToId.split('|')[0] : undefined;
+
+    for (const candidate of [replyToId, cleanReplyToId].filter(
+      Boolean,
+    ) as string[]) {
+      const mapped = this.messageToWebsiteMap.get(candidate);
+      if (mapped) {
+        return mapped;
+      }
+    }
+
+    if (teamsConversationId) {
+      const mappedByTeamsConversation =
+        this.teamsConversationToWebsiteMap.get(teamsConversationId);
+      if (mappedByTeamsConversation) {
+        return mappedByTeamsConversation;
+      }
+    }
+
+    if (
+      fallbackConversationId &&
+      fallbackConversationId !== 'website-fallback'
+    ) {
+      return fallbackConversationId;
+    }
+
+    return this.activeWebsiteConversationId;
+  }
+
   getMapKeys(): string[] {
     return Array.from(this.messageToWebsiteMap.keys());
   }
@@ -98,43 +177,70 @@ export class TeamsNotificationService {
     conversationId: string;
     userId?: string;
   }): Promise<TeamsNotificationResult> {
+    this.logger.log(
+      `[TeamsRelay] Starting proactive Teams send for conversationId=${data.conversationId}, userId=${data.userId ?? 'unknown'}`,
+    );
     await this.loadConversationReference();
 
     if (!this.conversationReference) {
       this.logger.warn(
-        'Teams proactive message skipped: No active conversation reference available.',
+        `[TeamsRelay] Teams proactive message skipped: No active conversation reference available for conversationId=${data.conversationId}`,
       );
       return { sent: false, reason: 'no_conversation_reference' };
     }
 
+    this.logger.log(
+      `[TeamsRelay] Loaded Teams conversation reference for conversationId=${data.conversationId}, conversationId=${this.conversationReference?.conversation?.id ?? 'n/a'}`,
+    );
+
     try {
       const appId = process.env.MICROSOFT_APP_ID ?? '';
+      const teamsConversationId = this.conversationReference?.conversation?.id;
       await this.adapter.continueConversationAsync(
         appId,
         this.conversationReference,
         async (context) => {
-          const card = TeamsFormattingUtil.formatProactiveMessage(data.question, data.answer);
+          const card = TeamsFormattingUtil.formatProactiveMessage(
+            data.question,
+            data.answer,
+          );
 
+          this.logger.log(
+            `[TeamsRelay] Sending proactive Teams card for conversationId=${data.conversationId}`,
+          );
           const response = await context.sendActivity({
             attachments: [card],
           });
 
           if (response?.id) {
-            // Map the Teams message ID to the Website Conversation ID
+            this.logger.log(
+              `[TeamsRelay] Teams card delivered. Teams message id=${response.id}, websiteConversationId=${data.conversationId}`,
+            );
             this.messageToWebsiteMap.set(response.id, data.conversationId);
-            const cleanId = response.id.split('|')[0]; 
+            const cleanId = response.id.split('|')[0];
             this.messageToWebsiteMap.set(cleanId, data.conversationId);
+          } else {
+            this.logger.warn(
+              `[TeamsRelay] Teams card send completed without a response id for conversationId=${data.conversationId}`,
+            );
           }
         },
       );
 
-      this.activeWebsiteConversationId = data.conversationId;
-      this.persistState();
+      if (teamsConversationId) {
+        this.registerConversationLink(teamsConversationId, data.conversationId);
+      }
+      this.setActiveWebsiteConversationId(data.conversationId);
 
-      this.logger.log(`Proactive Teams notification sent for conversationId=${data.conversationId}`);
+      this.logger.log(
+        `[TeamsRelay] Proactive Teams notification completed successfully for conversationId=${data.conversationId}`,
+      );
       return { sent: true };
     } catch (error) {
-      this.logger.error('Failed to send proactive Teams notification', error);
+      this.logger.error(
+        `[TeamsRelay] Failed to send proactive Teams notification for conversationId=${data.conversationId}`,
+        error,
+      );
       return { sent: false, reason: 'delivery_failed' };
     }
   }
