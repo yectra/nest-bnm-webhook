@@ -19,7 +19,9 @@ export class RequiredApiKeyGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
     const expected = this.config.get<string>('API_KEY');
     if (!expected) {
-      throw new ServiceUnavailableException('Administrative API key is not configured');
+      throw new ServiceUnavailableException(
+        'Administrative API key is not configured',
+      );
     }
 
     const request = context.switchToHttp().getRequest<Request>();

@@ -1,9 +1,12 @@
 import { registerAs } from '@nestjs/config';
 
 export default registerAs('azure', () => ({
-  // Azure OpenAI configuration – replace with your actual values in .env
   openaiBaseUrl: process.env.OPENAI_BASE_URL,
   openaiApiKey: process.env.OPENAI_API_KEY,
-  openaiModerationDeployment: process.env.OPENAI_MODERATION_DEPLOYMENT,
-  openaiEmbeddingDeployment: process.env.EMBEDDING_MODEL, // ← new line
+  openaiModel: process.env.OPENAI_MODEL,
+  openaiEmbeddingDeployment: process.env.EMBEDDING_MODEL,
+
+  microsoftAppId: process.env.MICROSOFT_APP_ID,
+  microsoftAppPassword: process.env.MICROSOFT_APP_PASSWORD,
+  microsoftAppTenantId: process.env.MICROSOFT_APP_TENANT_ID,
 }));

@@ -25,4 +25,3 @@ export interface QueryPlan {
   /** Maximum number of records to retrieve (default: 50) */
   limit?: number;
 }
-
