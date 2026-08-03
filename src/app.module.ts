@@ -64,6 +64,9 @@ import { AgentCrewModule } from './modules/agent-crew/agent-crew.module';
         // Falls back to OPENAI_MODEL when not set.
         AGENT_CREW_MODEL: Joi.string().min(1).optional(),
         AGENT_CREW_TOP_K: Joi.number().integer().min(1).max(50).default(5),
+        // Picture analysis (GPT-5 vision) is opt-in: the image agent never
+        // runs unless this is explicitly set to true.
+        AGENT_CREW_IMAGE_AGENT_ENABLED: Joi.boolean().default(false),
         AGENT_CREW_MAX_IMAGES: Joi.number().integer().min(1).max(10).default(4),
         AGENT_CREW_QUOTE_CONTAINER: Joi.string().min(1).default('Quote'),
         AGENT_CREW_REQUIREMENTS_CONTAINER: Joi.string()

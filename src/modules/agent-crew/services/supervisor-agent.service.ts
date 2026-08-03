@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { CrewLlmProvider } from './crew-llm.provider';
 import { CrewPlan } from '../interfaces/crew.interfaces';
 
@@ -23,8 +24,15 @@ const IMAGE_KEYWORDS =
 @Injectable()
 export class SupervisorAgentService {
   private readonly logger = new Logger(SupervisorAgentService.name);
+  private readonly imageAgentEnabled: boolean;
 
-  constructor(private readonly llm: CrewLlmProvider) {}
+  constructor(
+    private readonly llm: CrewLlmProvider,
+    config: ConfigService,
+  ) {
+    const flag = config.get<boolean | string>('AGENT_CREW_IMAGE_AGENT_ENABLED');
+    this.imageAgentEnabled = flag === true || flag === 'true';
+  }
 
   /** Plan the crew run with GPT-5; fall back to keyword heuristics on failure. */
   async plan(question: string): Promise<CrewPlan> {
@@ -45,7 +53,8 @@ export class SupervisorAgentService {
     const plan: CrewPlan = {
       useServices: parsed.useServices ?? fallback.useServices,
       useQuotes: parsed.useQuotes ?? fallback.useQuotes,
-      useImages: parsed.useImages ?? fallback.useImages,
+      useImages:
+        this.imageAgentEnabled && (parsed.useImages ?? fallback.useImages),
       rationale:
         typeof parsed.rationale === 'string' && parsed.rationale.length > 0
           ? parsed.rationale
@@ -61,7 +70,7 @@ export class SupervisorAgentService {
 
   private heuristicPlan(question: string): CrewPlan {
     const useQuotes = QUOTE_KEYWORDS.test(question);
-    const useImages = IMAGE_KEYWORDS.test(question);
+    const useImages = this.imageAgentEnabled && IMAGE_KEYWORDS.test(question);
     return {
       useServices: true,
       useQuotes,

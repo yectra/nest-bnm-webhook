@@ -126,6 +126,7 @@ Foundry and Cosmos DB vector search:
    recent quote documents).
 4. **Image agent** collects pictures attached to Quote and
    Post Your Requirements documents and analyzes them with GPT-5 vision.
+   Disabled by default; enable with `AGENT_CREW_IMAGE_AGENT_ENABLED=true`.
 5. **Synthesizer** (GPT-5) composes the answer from the retrieved context.
 6. **PII filter** redacts emails, phone numbers, card/ID numbers with a
    deterministic regex pass plus an optional GPT-5 review pass
@@ -146,7 +147,8 @@ socket.emit('askCrew', { message: 'Find services matching the pictures on my quo
 ```
 
 Configuration: `AGENT_CREW_MODEL` (GPT-5 deployment name, defaults to
-`OPENAI_MODEL`), `AGENT_CREW_TOP_K`, `AGENT_CREW_MAX_IMAGES`,
+`OPENAI_MODEL`), `AGENT_CREW_TOP_K`,
+`AGENT_CREW_IMAGE_AGENT_ENABLED` (default `false`), `AGENT_CREW_MAX_IMAGES`,
 `AGENT_CREW_QUOTE_CONTAINER`, `AGENT_CREW_REQUIREMENTS_CONTAINER`,
 `AGENT_CREW_PII_LLM_REVIEW`.
 
