@@ -26,6 +26,25 @@ export class CosmosRepository {
     return this.database.container(containerName);
   }
 
+  async ensureStandardContainer(
+    containerName: string,
+    partitionKeyPath: string = '/id',
+  ): Promise<Container> {
+    try {
+      const { container } = await this.database.containers.createIfNotExists({
+        id: containerName,
+        partitionKey: { paths: [partitionKeyPath] },
+      });
+      return container;
+    } catch (error) {
+      this.logger.error(
+        `Failed to ensure standard container "${containerName}"`,
+        error,
+      );
+      return this.database.container(containerName);
+    }
+  }
+
   async ensureVectorContainer(
     containerName: string,
     partitionKeyPath: string = '/id',
@@ -88,12 +107,12 @@ export class CosmosRepository {
     containerName: string,
     item: T,
     partitionKeyPath: string = '/id',
+    isVector: boolean = false,
   ): Promise<T> {
     try {
-      const container = await this.ensureVectorContainer(
-        containerName,
-        partitionKeyPath,
-      );
+      const container = isVector
+        ? await this.ensureVectorContainer(containerName, partitionKeyPath)
+        : await this.ensureStandardContainer(containerName, partitionKeyPath);
       const { resource } = await container.items.upsert(item);
       return (resource as unknown as T) ?? item;
     } catch (error) {

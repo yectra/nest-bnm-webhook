@@ -51,6 +51,36 @@ export class ConversationRepository {
     return this.memoryStore.get(conversationId) ?? [];
   }
 
+  /** Fetch conversation history asynchronously from Cosmos DB if not cached in memory */
+  async fetchHistoryFromDb(conversationId: string): Promise<ConversationRecord[]> {
+    const cached = this.memoryStore.get(conversationId);
+    if (cached && cached.length > 0) {
+      return cached;
+    }
+
+    try {
+      const query = 'SELECT * FROM c WHERE c.conversationId = @conversationId ORDER BY c.timestamp ASC';
+      const parameters = [{ name: '@conversationId', value: conversationId }];
+      const records = await this.cosmosRepository.queryVector<ConversationRecord>(
+        this.containerName,
+        query,
+        parameters,
+      );
+
+      if (records && records.length > 0) {
+        this.memoryStore.set(conversationId, records.slice(-50));
+        return records;
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Failed to fetch conversation history from Cosmos DB for conversationId=${conversationId}`,
+        error,
+      );
+    }
+
+    return [];
+  }
+
   /** Gets formatted chat messages for prompt context */
   getFormattedHistory(conversationId: string) {
     const history = this.getHistory(conversationId);
