@@ -37,6 +37,15 @@ export class ChatbotService {
     const channel = dto.channel || 'Website';
     const timestamp = new Date().toISOString();
 
+    if (channel === 'Website') {
+      this.teamsNotificationService.setActiveWebsiteConversationId(
+        conversationId,
+      );
+      this.logger.log(
+        `[ChatbotFlow] Stage 1b: Registered active website conversation. conversationId=${conversationId}`,
+      );
+    }
+
     this.logger.log(
       `[ChatbotFlow] Stage 1: Website question received. channel=${channel}, userId=${userId}, conversationId=${conversationId}, message="${message}"`,
     );

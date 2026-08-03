@@ -67,6 +67,15 @@ export class TeamsBot extends ActivityHandler {
             this.notificationService.getActiveWebsiteConversationId(),
         });
 
+      const activeWebsiteConversationId =
+        this.notificationService.getActiveWebsiteConversationId();
+      if (!websiteConversationId && activeWebsiteConversationId) {
+        websiteConversationId = activeWebsiteConversationId;
+        this.logger.log(
+          `[TeamsRelay] Falling back to active website conversation. conversationId=${websiteConversationId}`,
+        );
+      }
+
       if (websiteConversationId) {
         this.notificationService.registerConversationLink(
           teamsConversationId ?? 'teams-default-session',
