@@ -54,7 +54,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: Socket,
     @MessageBody() dto: ChatMessageDto,
   ) {
-    const conversationId = dto.conversationId || dto.sessionId || `session-${client.id}`;
+    const conversationId =
+      dto.conversationId || dto.sessionId || `session-${client.id}`;
     const result = await this.chatbotService.processMessage({
       ...dto,
       conversationId,
@@ -77,6 +78,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.server.to(sessionId).emit(event, payload);
       // Also broadcast globally so all listening website windows update instantly
       this.server.emit(event, payload);
+    }
+  }
+
+  emitDirectLineActivity(sessionId: string, activity: unknown) {
+    if (this.server) {
+      this.server.to(sessionId).emit('activity', activity);
+      this.server.emit('activity', activity);
     }
   }
 }
