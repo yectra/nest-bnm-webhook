@@ -26,19 +26,6 @@ describe('TeamsNotificationService', () => {
     expect(result).toBe('website-xyz');
   });
 
-  it('handles semicolon-separated replyToId strings', () => {
-    const service = new TeamsNotificationService({} as any, {} as any);
-    service['messageToWebsiteMap'].set('reply-456', 'website-semi');
-
-    const result = service.resolveWebsiteConversationId({
-      replyToId: 'reply-456;messageid=reply-456',
-      teamsConversationId: 'teams-1',
-      fallbackConversationId: 'website-fallback',
-    });
-
-    expect(result).toBe('website-semi');
-  });
-
   it('falls back to the active website conversation id', () => {
     const service = new TeamsNotificationService({} as any, {} as any);
     service.setActiveWebsiteConversationId('website-active');

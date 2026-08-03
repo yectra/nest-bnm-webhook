@@ -41,9 +41,7 @@ export class TeamsBot extends ActivityHandler {
     });
 
     this.onMessage(async (context: TurnContext, next) => {
-      const textWithoutMention = TurnContext.removeRecipientMention(
-        context.activity,
-      );
+      TurnContext.removeRecipientMention(context.activity);
 
       // Ensure state is loaded from Cosmos DB if server restarted
       await this.notificationService.loadConversationReference();
@@ -57,25 +55,7 @@ export class TeamsBot extends ActivityHandler {
       // activeWebsiteConversationId are available even after a server restart.
       await this.notificationService.loadConversationReference();
 
-      let rawText = textWithoutMention || context.activity.text || '';
-      if (!rawText && context.activity.value) {
-        rawText =
-          typeof context.activity.value === 'string'
-            ? context.activity.value
-            : (context.activity.value.text ||
-                context.activity.value.message ||
-                '');
-      }
-
-      const message = rawText
-        .replace(/<at[^>]*>[\s\S]*?<\/at>/gi, '')
-        .replace(/<[^>]+>/g, '')
-        .replace(/&nbsp;/gi, ' ')
-        .replace(/&amp;/gi, '&')
-        .replace(/&lt;/gi, '<')
-        .replace(/&gt;/gi, '>')
-        .trim();
-
+      const message = context.activity.text?.trim() ?? '';
       const replyToId = context.activity.replyToId;
       const teamsConversationId = context.activity.conversation?.id;
 
@@ -116,22 +96,14 @@ export class TeamsBot extends ActivityHandler {
           `[TeamsRelay] Forwarding Teams reply to website UI. websiteConversationId=${websiteConversationId}, sourceMessage=${message}`,
         );
 
-        if (!message) {
-          this.logger.warn(
-            `[TeamsRelay] Skipping Teams relay save because the incoming message text was empty. conversationId=${websiteConversationId}`,
-          );
-          await next();
-          return;
-        }
-
         const timestamp = new Date().toISOString();
         const agentRecord = {
           conversationId: websiteConversationId,
           userId: context.activity.from?.id ?? 'teams-agent',
-          question: 'Human Support Reply',
+          question: '', // It's an answer from the agent
           answer: message,
           source: 'Teams' as const,
-          channel: 'Website' as const,
+          channel: 'Website' as const, // Destination channel
           timestamp,
         };
 
