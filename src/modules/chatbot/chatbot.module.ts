@@ -1,4 +1,4 @@
-import { forwardRef, Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { ChatbotController } from './chatbot.controller';
 import { ChatbotService } from './chatbot.service';
 import { ChatGateway } from './gateway/chat.gateway';
@@ -36,6 +36,9 @@ import { BotAdapter } from '../bot/bot.adapter';
     TeamsNotificationService,
     WebsiteRealtimeService,
     ChatGateway,
+    CosmosRepository,
+    EmbeddingService,
+    VectorSearchService,
   ],
 })
 export class ChatbotModule {}
