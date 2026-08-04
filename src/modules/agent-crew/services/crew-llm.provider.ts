@@ -17,7 +17,7 @@ export class CrewLlmProvider {
     this.model =
       config.get<string>('AGENT_CREW_MODEL') ??
       config.get<string>('OPENAI_MODEL') ??
-      'gpt-5';
+      'gpt-5.1';
     const timeout = config.get<number>('OPENAI_TIMEOUT_MS') ?? 30000;
 
     this.client = new OpenAI({
@@ -69,9 +69,9 @@ export class CrewLlmProvider {
   }
 
   /** GPT-5 vision analysis of a single image URL. */
-  async describeImage(prompt: string, imageUrl: string): Promise<string> {
+  async describeImage(prompt: string, imageUrl: string, modelOverride?: string): Promise<string> {
     const response = await this.client.chat.completions.create({
-      model: this.model,
+      model: modelOverride ?? this.model,
       messages: [
         {
           role: 'user',

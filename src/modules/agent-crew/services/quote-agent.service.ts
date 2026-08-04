@@ -85,12 +85,10 @@ export class QuoteAgentService implements CrewAgentDefinition {
   ): Promise<VectorSearchResult[]> {
     const matches = await this.vectorSearchService.search(
       question,
-      null,
+      this.quoteContainer,
       userId,
     );
-    return matches.filter((match) =>
-      /quote/i.test(match.sourceContainer ?? ''),
-    );
+    return matches;
   }
 
   private async fetchRecentQuotes(

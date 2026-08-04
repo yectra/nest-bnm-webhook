@@ -48,6 +48,7 @@ export class ImageAgentService implements CrewAgentDefinition {
   private readonly requirementsContainer: string;
   private readonly maxImages: number;
   private readonly isEnabled: boolean;
+  private readonly imageModel: string;
 
   constructor(
     private readonly cosmosRepository: CosmosRepository,
@@ -62,6 +63,9 @@ export class ImageAgentService implements CrewAgentDefinition {
     this.maxImages = config.get<number>('AGENT_CREW_MAX_IMAGES') ?? 4;
     const flag = config.get<boolean | string>('AGENT_CREW_IMAGE_AGENT_ENABLED');
     this.isEnabled = flag === true || flag === 'true';
+    this.imageModel =
+      config.get<string>('OPENAI_IMAGE_MODEL') ??
+      'gpt-5-nano';
   }
 
   /** Picture analysis is opt-in: off unless AGENT_CREW_IMAGE_AGENT_ENABLED=true. */
@@ -109,6 +113,7 @@ export class ImageAgentService implements CrewAgentDefinition {
           const summary = await this.llm.describeImage(
             buildImageAnalysisPrompt(image.sourceContainer, question),
             image.url,
+            this.imageModel,
           );
           if (!summary) {
             return null;

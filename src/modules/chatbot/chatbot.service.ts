@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { ChatMessageDto } from './dto/chat-message.dto';
 import { ChatResponseDto } from './dto/chat-response.dto';
 import { ContainerClassifierService } from './services/container-classifier.service';
@@ -14,6 +15,7 @@ import { VectorSearchResult } from './interfaces/vector-search.interface';
 @Injectable()
 export class ChatbotService {
   private readonly logger = new Logger(ChatbotService.name);
+  private readonly chatbotCallsEnabled: boolean;
 
   constructor(
     private readonly containerClassifier: ContainerClassifierService,
@@ -23,7 +25,11 @@ export class ChatbotService {
     private readonly conversationRepository: ConversationRepository,
     private readonly teamsNotificationService: TeamsNotificationService,
     private readonly websiteRealtimeService: WebsiteRealtimeService,
-  ) {}
+    private readonly config: ConfigService,
+  ) {
+    const flag = this.config.get<string | boolean>('CHATBOT_CALLS_ENABLED');
+    this.chatbotCallsEnabled = flag !== 'false' && flag !== false;
+  }
 
   /**
    * Single Orchestrator Entrypoint for both Website Chat UI and Microsoft Teams.
@@ -36,6 +42,25 @@ export class ChatbotService {
     const userId = dto.userId || 'anonymous';
     const channel = dto.channel || 'Website';
     const timestamp = new Date().toISOString();
+
+    if (!this.chatbotCallsEnabled) {
+      this.logger.warn(`Chatbot calls disabled by CHATBOT_CALLS_ENABLED flag. Short-circuiting run.`);
+      return {
+        success: false,
+        response:`This feature isn't available right now. Please try again later or contact support if the issue continues.`,
+        conversationId,
+        sessionId: conversationId,
+        userId,
+        channel,
+        timestamp,
+        meta: {
+          domain: 'none',
+          container: 'none',
+          totalMatches: 0,
+          matchedDocuments: [],
+        },
+      };
+    }
 
     if (channel === 'Website') {
       this.teamsNotificationService.setActiveWebsiteConversationId(

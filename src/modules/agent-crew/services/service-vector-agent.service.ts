@@ -56,20 +56,14 @@ export class ServiceVectorAgentService implements CrewAgentDefinition {
   ): Promise<VectorSearchResult[]> {
     const matches = await this.vectorSearchService.search(
       question,
-      null,
+      'Service',
       userId,
     );
 
-    const serviceMatches = matches.filter((match) =>
-      /service/i.test(match.sourceContainer ?? ''),
-    );
-
-    // If nothing came back tagged as a Service document, keep the general
-    // matches so the synthesizer still has catalog context to work with.
-    const selected = serviceMatches.length > 0 ? serviceMatches : matches;
+    // No need to filter by sourceContainer since we queried the Service container directly
     this.logger.log(
-      `Service vector agent: ${selected.length}/${matches.length} matches selected`,
+      `Service vector agent: ${matches.length} matches selected from Service container`,
     );
-    return selected.slice(0, this.topK);
+    return matches.slice(0, this.topK);
   }
 }
