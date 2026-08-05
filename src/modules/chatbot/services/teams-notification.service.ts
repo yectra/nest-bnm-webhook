@@ -34,6 +34,15 @@ export class TeamsNotificationService {
     });
   }
 
+  private cleanMessageId(id: string): string {
+    let clean = id;
+    if (clean.startsWith('f:')) {
+      clean = clean.substring(2);
+    }
+    clean = clean.split('|')[0];
+    return clean.trim();
+  }
+
   /** Save conversation reference when user messages bot in Teams or bot is added */
   saveConversationReference(reference: Partial<ConversationReference>): void {
     this.conversationReference = reference;
@@ -41,10 +50,8 @@ export class TeamsNotificationService {
     this.persistState();
   }
 
-  /** Try to reload state from Cosmos DB if memory is wiped */
+  /** Try to reload state from Cosmos DB */
   async loadConversationReference(): Promise<void> {
-    if (this.conversationReference) return;
-
     try {
       const data = await this.cosmosRepository.getItem<{ id: string; reference?: Partial<ConversationReference>; map?: [string, string][]; activeWebsiteConversationId?: string; }>(
         this.containerName,
@@ -74,7 +81,24 @@ export class TeamsNotificationService {
 
   /** Look up which website conversation a Teams message is replying to */
   getWebsiteConversationId(teamsMessageId: string): string | undefined {
-    return this.messageToWebsiteMap.get(teamsMessageId);
+    const cleanId = this.cleanMessageId(teamsMessageId);
+    
+    // Try cleaned ID
+    const result = this.messageToWebsiteMap.get(cleanId);
+    if (result) return result;
+
+    // Try raw ID
+    const rawResult = this.messageToWebsiteMap.get(teamsMessageId);
+    if (rawResult) return rawResult;
+
+    // Partial/cleaned matches in keys
+    for (const [key, val] of this.messageToWebsiteMap.entries()) {
+      const cleanKey = this.cleanMessageId(key);
+      if (cleanKey === cleanId || key.includes(cleanId) || cleanId.includes(cleanKey)) {
+        return val;
+      }
+    }
+    return undefined;
   }
 
   getActiveWebsiteConversationId(): string | undefined {

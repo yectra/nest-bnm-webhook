@@ -59,7 +59,16 @@ export class TeamsBot extends ActivityHandler {
         ? this.notificationService.getWebsiteConversationId(replyToId)
         : undefined;
 
-      // Fallback: If they didn't reply to a specific message, route to the active conversation
+      // Fallback 1: Extract thread root message ID from conversation ID in Teams (for threaded channel replies)
+      if (!websiteConversationId && context.activity.conversation?.id) {
+        const convId = context.activity.conversation.id;
+        const match = convId.match(/messageid=([^;]+)/);
+        if (match && match[1]) {
+          websiteConversationId = this.notificationService.getWebsiteConversationId(match[1]);
+        }
+      }
+
+      // Fallback 2: If they didn't reply to a specific message/thread, route to the active conversation
       if (!websiteConversationId) {
         websiteConversationId = this.notificationService.getActiveWebsiteConversationId();
       }
