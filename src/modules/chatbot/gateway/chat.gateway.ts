@@ -16,7 +16,7 @@ import { ChatMessageDto } from '../dto/chat-message.dto';
   cors: {
     origin: '*',
   },
-  namespace: 'api/chatbot',
+  namespace: '/api/chatbot',
 })
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private readonly logger = new Logger(ChatGateway.name);
