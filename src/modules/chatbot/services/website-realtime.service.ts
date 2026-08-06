@@ -20,11 +20,28 @@ export class WebsiteRealtimeService {
         record,
       );
       this.logger.log(
-        `Website realtime event 'conversationUpdated' emitted for conversationId=${record.conversationId}`,
+        `[TeamsRelay] Website realtime event 'conversationUpdated' emitted for conversationId=${record.conversationId}`,
       );
     } catch (error) {
       this.logger.warn(
         `Failed to emit website realtime update for conversationId=${record.conversationId}`,
+        error,
+      );
+    }
+  }
+
+  notifyDirectLineActivity(
+    sessionId: string,
+    activity: Record<string, unknown>,
+  ): void {
+    try {
+      this.chatGateway.emitDirectLineActivity(sessionId, activity);
+      this.logger.log(
+        `[TeamsRelay] Website realtime event 'activity' emitted for conversationId=${sessionId}`,
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Failed to emit Direct Line activity for conversationId=${sessionId}`,
         error,
       );
     }
