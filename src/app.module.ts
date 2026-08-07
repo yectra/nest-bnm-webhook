@@ -79,9 +79,33 @@ import { WhatsappCrewModule } from './modules/whatsapp-crew/whatsapp-crew.module
         // through Azure Event Grid. When the topic is not configured, events
         // are processed via the in-process fallback bus instead.
         WHATSAPP_CREW_ENABLED: Joi.boolean().default(true),
-        // Adversary (prompt-injection) filter: regex pass always runs; this
-        // flag controls the extra LLM review for paraphrased attempts.
-        WHATSAPP_CREW_ADVERSARY_LLM_REVIEW: Joi.boolean().default(true),
+        // Adversary (prompt-injection) guard, reusable across workflows:
+        // regex pass -> semantic match against a Cosmos vector container of
+        // known-attack exemplars -> borderline review by a low-cost
+        // open-source model on any OpenAI-compatible endpoint.
+        ADVERSARY_GUARD_CONTAINER: Joi.string()
+          .min(1)
+          .default('AdversarialInputs'),
+        ADVERSARY_GUARD_SEED: Joi.boolean().default(true),
+        ADVERSARY_GUARD_LEARN: Joi.boolean().default(true),
+        ADVERSARY_GUARD_TOP_K: Joi.number().integer().min(1).max(20).default(3),
+        ADVERSARY_GUARD_BLOCK_THRESHOLD: Joi.number()
+          .min(0)
+          .max(1)
+          .default(0.82),
+        ADVERSARY_GUARD_REVIEW_THRESHOLD: Joi.number()
+          .min(0)
+          .max(1)
+          .default(0.6),
+        ADVERSARY_GUARD_LLM_REVIEW: Joi.boolean().default(true),
+        // Deployment name of the open-source review model (e.g. an Azure AI
+        // Foundry serverless Phi/Llama deployment, or a model served by a
+        // self-hosted Ollama/vLLM endpoint via ADVERSARY_GUARD_LLM_BASE_URL).
+        ADVERSARY_GUARD_LLM_MODEL: Joi.string()
+          .min(1)
+          .default('phi-4-mini-instruct'),
+        ADVERSARY_GUARD_LLM_BASE_URL: Joi.string().uri().optional(),
+        ADVERSARY_GUARD_LLM_API_KEY: Joi.string().min(1).optional(),
         WHATSAPP_CREW_PROJECT_CONTAINER: Joi.string().min(1).default('Project'),
         WHATSAPP_CREW_FEEDBACK_CONTAINER: Joi.string()
           .min(1)

@@ -3,6 +3,7 @@ import { ChatbotModule } from '../chatbot/chatbot.module';
 import { AgentCrewModule } from '../agent-crew/agent-crew.module';
 import { WhatsappModule } from '../whatsapp/whatsapp.module';
 import { AzureEventsModule } from '../azure-events/azure-events.module';
+import { AdversaryGuardModule } from '../adversary-guard/adversary-guard.module';
 import { WhatsappCrewController } from './whatsapp-crew.controller';
 import { WhatsappCrewService } from './whatsapp-crew.service';
 import { WhatsappCrewGraphFactory } from './graph/whatsapp-crew-graph.factory';
@@ -11,7 +12,6 @@ import {
   WhatsappCrewAgentDefinition,
 } from './graph/whatsapp-crew-agent.definition';
 import { MediaIntakeService } from './services/media-intake.service';
-import { AdversaryFilterService } from './services/adversary-filter.service';
 import { WhatsappSupervisorService } from './services/whatsapp-supervisor.service';
 import { ProjectDetailsAgentService } from './services/project-details-agent.service';
 import { QuoteDetailsAgentService } from './services/quote-details-agent.service';
@@ -22,11 +22,16 @@ import { WhatsappReplySynthesizerService } from './services/whatsapp-reply-synth
 import { WhatsappDispatchService } from './services/whatsapp-dispatch.service';
 
 @Module({
-  imports: [ChatbotModule, AgentCrewModule, WhatsappModule, AzureEventsModule],
+  imports: [
+    ChatbotModule,
+    AgentCrewModule,
+    WhatsappModule,
+    AzureEventsModule,
+    AdversaryGuardModule,
+  ],
   controllers: [WhatsappCrewController],
   providers: [
     MediaIntakeService,
-    AdversaryFilterService,
     ProjectDetailsAgentService,
     QuoteDetailsAgentService,
     RequirementsAgentService,

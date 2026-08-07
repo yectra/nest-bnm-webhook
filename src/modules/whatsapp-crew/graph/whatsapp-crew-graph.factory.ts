@@ -10,7 +10,7 @@ import {
   WhatsappCrewAgentDefinition,
 } from './whatsapp-crew-agent.definition';
 import { MediaIntakeService } from '../services/media-intake.service';
-import { AdversaryFilterService } from '../services/adversary-filter.service';
+import { AdversaryGuardService } from '../../adversary-guard/services/adversary-guard.service';
 import { buildAdversarySafeReply } from '../prompts/whatsapp-crew.prompts';
 import { WhatsappSupervisorService } from '../services/whatsapp-supervisor.service';
 import { AttributionAgentService } from '../services/attribution-agent.service';
@@ -88,7 +88,7 @@ export class WhatsappCrewGraphFactory {
     @Inject(WHATSAPP_CREW_AGENTS)
     private readonly agents: WhatsappCrewAgentDefinition[],
     private readonly mediaIntakeService: MediaIntakeService,
-    private readonly adversaryFilterService: AdversaryFilterService,
+    private readonly adversaryGuardService: AdversaryGuardService,
     private readonly supervisorService: WhatsappSupervisorService,
     private readonly attributionAgent: AttributionAgentService,
     private readonly replySynthesizer: WhatsappReplySynthesizerService,
@@ -245,7 +245,7 @@ export class WhatsappCrewGraphFactory {
   private async runAdversaryFilter(
     state: WhatsappCrewState,
   ): Promise<Partial<WhatsappCrewState>> {
-    const adversary = await this.adversaryFilterService.inspect(state.question);
+    const adversary = await this.adversaryGuardService.inspect(state.question);
     if (!adversary.adversarial) {
       return {
         adversary,
@@ -258,7 +258,7 @@ export class WhatsappCrewGraphFactory {
       trace: [
         waTraceEntry(
           WHATSAPP_CREW_BACKBONE.ADVERSARY_FILTER,
-          `blocked (${adversary.matchedPatterns.join(', ')}, confidence=${adversary.confidence.toFixed(2)}): ${adversary.rationale}`,
+          `blocked via ${adversary.method} (confidence=${adversary.confidence.toFixed(2)}): ${adversary.rationale}`,
         ),
       ],
     };
