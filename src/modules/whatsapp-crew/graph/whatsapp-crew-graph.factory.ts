@@ -10,6 +10,8 @@ import {
   WhatsappCrewAgentDefinition,
 } from './whatsapp-crew-agent.definition';
 import { MediaIntakeService } from '../services/media-intake.service';
+import { AdversaryFilterService } from '../services/adversary-filter.service';
+import { buildAdversarySafeReply } from '../prompts/whatsapp-crew.prompts';
 import { WhatsappSupervisorService } from '../services/whatsapp-supervisor.service';
 import { AttributionAgentService } from '../services/attribution-agent.service';
 import { WhatsappReplySynthesizerService } from '../services/whatsapp-reply-synthesizer.service';
@@ -25,6 +27,7 @@ import { WhatsappDispatchService } from '../services/whatsapp-dispatch.service';
  */
 export const WHATSAPP_CREW_BACKBONE = {
   INTAKE: 'intake',
+  ADVERSARY_FILTER: 'adversaryFilter',
   SUPERVISOR: 'supervisor',
   ATTRIBUTION: 'attributionAgent',
   SYNTHESIZE: 'synthesize',
@@ -60,18 +63,22 @@ interface DynamicGraphBuilder {
 /**
  * Builds the compiled WhatsApp LangGraph crew:
  *
- *   START -> intake -> supervisor -+-> [registered agent 0] -+
- *                                  +-> [registered agent 1] -+-> attributionAgent
- *                                  +-> [registered agent n] -+        |
- *                                                                     v
- *                            END <- dispatchAgent <- piiFilter <- synthesize
+ *   START -> intake -> adversaryFilter -> supervisor -+-> [registered agent 0] -+
+ *                            |                        +-> [registered agent 1] -+-> attributionAgent
+ *                            | (adversarial:          +-> [registered agent n] -+        |
+ *                            |  safe canned reply)                                       v
+ *                            +-------------------> piiFilter <----------------- synthesize
+ *                                                      |
+ *                                     END <- dispatchAgent
  *
  * Retrieval agents come from the WHATSAPP_CREW_AGENTS registry: each is a
  * node, an edge into attributionAgent, a conditional-routing target, and a
  * line in the supervisor's planning prompt. The agents selected by the
  * supervisor run in parallel within one superstep and fan back in at the
  * attribution node, which decides which customer journey the reply should be
- * attributed to.
+ * attributed to. Messages the adversary filter flags as prompt-injection
+ * attempts never reach the planner, retrieval, or synthesis LLMs: they jump
+ * straight to the PII filter carrying a safe canned reply.
  */
 @Injectable()
 export class WhatsappCrewGraphFactory {
@@ -81,6 +88,7 @@ export class WhatsappCrewGraphFactory {
     @Inject(WHATSAPP_CREW_AGENTS)
     private readonly agents: WhatsappCrewAgentDefinition[],
     private readonly mediaIntakeService: MediaIntakeService,
+    private readonly adversaryFilterService: AdversaryFilterService,
     private readonly supervisorService: WhatsappSupervisorService,
     private readonly attributionAgent: AttributionAgentService,
     private readonly replySynthesizer: WhatsappReplySynthesizerService,
@@ -97,6 +105,9 @@ export class WhatsappCrewGraphFactory {
 
     graph
       .addNode(WHATSAPP_CREW_BACKBONE.INTAKE, (state) => this.runIntake(state))
+      .addNode(WHATSAPP_CREW_BACKBONE.ADVERSARY_FILTER, (state) =>
+        this.runAdversaryFilter(state),
+      )
       .addNode(WHATSAPP_CREW_BACKBONE.SUPERVISOR, (state) =>
         this.runSupervisor(state),
       )
@@ -115,7 +126,7 @@ export class WhatsappCrewGraphFactory {
       .addEdge(START, WHATSAPP_CREW_BACKBONE.INTAKE)
       .addEdge(
         WHATSAPP_CREW_BACKBONE.INTAKE,
-        WHATSAPP_CREW_BACKBONE.SUPERVISOR,
+        WHATSAPP_CREW_BACKBONE.ADVERSARY_FILTER,
       );
 
     for (const agent of this.agents) {
@@ -125,6 +136,16 @@ export class WhatsappCrewGraphFactory {
     }
 
     graph
+      // Clean messages continue to the supervisor; flagged ones jump straight
+      // to the PII filter carrying the safe canned reply set by the node.
+      .addConditionalEdges(
+        WHATSAPP_CREW_BACKBONE.ADVERSARY_FILTER,
+        (state) =>
+          state.adversary?.adversarial
+            ? [WHATSAPP_CREW_BACKBONE.PII_FILTER]
+            : [WHATSAPP_CREW_BACKBONE.SUPERVISOR],
+        [WHATSAPP_CREW_BACKBONE.SUPERVISOR, WHATSAPP_CREW_BACKBONE.PII_FILTER],
+      )
       .addConditionalEdges(
         WHATSAPP_CREW_BACKBONE.SUPERVISOR,
         (state) => this.routeFromSupervisor(state),
@@ -216,6 +237,28 @@ export class WhatsappCrewGraphFactory {
         waTraceEntry(
           WHATSAPP_CREW_BACKBONE.INTAKE,
           `type=${state.message.messageType}, mediaInsights=${result.mediaInsights.length}`,
+        ),
+      ],
+    };
+  }
+
+  private async runAdversaryFilter(
+    state: WhatsappCrewState,
+  ): Promise<Partial<WhatsappCrewState>> {
+    const adversary = await this.adversaryFilterService.inspect(state.question);
+    if (!adversary.adversarial) {
+      return {
+        adversary,
+        trace: [waTraceEntry(WHATSAPP_CREW_BACKBONE.ADVERSARY_FILTER, 'clean')],
+      };
+    }
+    return {
+      adversary,
+      draftReply: buildAdversarySafeReply(state.message?.profileName),
+      trace: [
+        waTraceEntry(
+          WHATSAPP_CREW_BACKBONE.ADVERSARY_FILTER,
+          `blocked (${adversary.matchedPatterns.join(', ')}, confidence=${adversary.confidence.toFixed(2)}): ${adversary.rationale}`,
         ),
       ],
     };

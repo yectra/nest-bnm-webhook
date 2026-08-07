@@ -79,6 +79,9 @@ import { WhatsappCrewModule } from './modules/whatsapp-crew/whatsapp-crew.module
         // through Azure Event Grid. When the topic is not configured, events
         // are processed via the in-process fallback bus instead.
         WHATSAPP_CREW_ENABLED: Joi.boolean().default(true),
+        // Adversary (prompt-injection) filter: regex pass always runs; this
+        // flag controls the extra LLM review for paraphrased attempts.
+        WHATSAPP_CREW_ADVERSARY_LLM_REVIEW: Joi.boolean().default(true),
         WHATSAPP_CREW_PROJECT_CONTAINER: Joi.string().min(1).default('Project'),
         WHATSAPP_CREW_FEEDBACK_CONTAINER: Joi.string()
           .min(1)

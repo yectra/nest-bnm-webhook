@@ -11,6 +11,7 @@ import {
   WhatsappCrewAgentDefinition,
 } from './graph/whatsapp-crew-agent.definition';
 import { MediaIntakeService } from './services/media-intake.service';
+import { AdversaryFilterService } from './services/adversary-filter.service';
 import { WhatsappSupervisorService } from './services/whatsapp-supervisor.service';
 import { ProjectDetailsAgentService } from './services/project-details-agent.service';
 import { QuoteDetailsAgentService } from './services/quote-details-agent.service';
@@ -25,6 +26,7 @@ import { WhatsappDispatchService } from './services/whatsapp-dispatch.service';
   controllers: [WhatsappCrewController],
   providers: [
     MediaIntakeService,
+    AdversaryFilterService,
     ProjectDetailsAgentService,
     QuoteDetailsAgentService,
     RequirementsAgentService,

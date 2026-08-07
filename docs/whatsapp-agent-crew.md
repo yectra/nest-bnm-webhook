@@ -17,11 +17,13 @@ Azure Event Grid push subscription
         |                                acks deliveries instantly, processes in background)
         v
 WhatsApp LangGraph crew
-  START -> intake -> supervisor -+-> projectAgent      -+
-                                 +-> quoteAgent         +-> attributionAgent
-                                 +-> requirementsAgent  +        |
-                                 +-> feedbackAgent     -+        v
-                          END <- dispatchAgent <- piiFilter <- synthesize
+  START -> intake -> adversaryFilter -> supervisor -+-> projectAgent      -+
+                          |                         +-> quoteAgent         +-> attributionAgent
+                          | (adversarial: safe      +-> requirementsAgent  +        |
+                          |  canned reply)          +-> feedbackAgent     -+        v
+                          +----------------------> piiFilter <------------- synthesize
+                                                       |
+                                      END <- dispatchAgent
         |
         v
 Reply sent to the customer over the Twilio REST API (whatsapp:<number>)
@@ -32,6 +34,7 @@ Reply sent to the customer over the Twilio REST API (whatsapp:<number>)
 | Node | Responsibility |
 | --- | --- |
 | `intake` | Normalizes **every** message type into text the crew can reason over: text, image (GPT vision description), video, audio/voice, document, sticker, location, contact cards, button replies, interactive list replies, reactions. |
+| `adversaryFilter` | Prompt-injection guard. A deterministic regex pass catches known attacks ("ignore previous instructions", "do not consider agent responses", "reveal your system prompt", role overrides, jailbreaks, guard-bypass requests); an optional LLM review catches paraphrased ones (fails open so real customers are never locked out). Flagged messages never reach the planner, retrieval, or synthesis LLMs — they jump straight to the PII filter with a safe canned reply. All crew prompts additionally instruct the models to treat customer text as data, not instructions. |
 | `supervisor` | LLM planner (keyword-heuristic fallback) that decides which retrieval agents run; derived from the agent registry. |
 | `projectAgent` | Customer's **project details** (`Project` container): vector matches + most recent records. |
 | `quoteAgent` | Customer's **quote details** (`Quote` container). |
@@ -53,6 +56,7 @@ attribution candidates all derive from the registry.
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `WHATSAPP_CREW_ENABLED` | `true` | Kill-switch for crew processing. |
+| `WHATSAPP_CREW_ADVERSARY_LLM_REVIEW` | `true` | Extra LLM pass in the adversary filter for paraphrased injection attempts (the regex pass always runs). |
 | `AZURE_EVENT_GRID_TOPIC_ENDPOINT` | — | Custom-topic endpoint. Unset → in-process fallback bus. |
 | `AZURE_EVENT_GRID_TOPIC_KEY` | — | Topic access key (`aeg-sas-key`). |
 | `AZURE_EVENT_GRID_WEBHOOK_SECRET` | — | When set, required as `?code=` on the events endpoint. |

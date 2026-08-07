@@ -18,6 +18,19 @@ export interface ResponseAttribution {
   rationale: string;
 }
 
+/**
+ * Verdict of the adversary filter on an inbound message: whether it looks
+ * like a prompt-injection / instruction-override attempt (e.g. "do not
+ * consider agent responses", "ignore previous instructions") rather than a
+ * genuine customer question.
+ */
+export interface AdversaryVerdict {
+  adversarial: boolean;
+  matchedPatterns: string[];
+  confidence: number;
+  rationale: string;
+}
+
 /** Which retrieval agents the supervisor activated for a message. */
 export interface WhatsappCrewPlan {
   agents: Record<string, boolean>;

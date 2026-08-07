@@ -2,6 +2,7 @@ import { Annotation } from '@langchain/langgraph';
 import { VectorSearchResult } from '../../chatbot/interfaces/vector-search.interface';
 import { WhatsappInboundMessage } from '../../whatsapp/interfaces/whatsapp-message.interface';
 import {
+  AdversaryVerdict,
   ResponseAttribution,
   WhatsappCrewPlan,
   WhatsappCrewTraceEntry,
@@ -11,8 +12,10 @@ import {
 
 /**
  * Shared LangGraph state for the WhatsApp crew:
- * intake -> supervisor -> (project | quote | requirements | feedback) ->
+ * intake -> adversaryFilter -> supervisor ->
+ * (project | quote | requirements | feedback) ->
  * attribution -> synthesize -> piiFilter -> dispatchAgent
+ * (adversarial messages short-circuit from adversaryFilter to piiFilter)
  *
  * The retrieval branches run in the same superstep, so their partial updates
  * target disjoint channels and the trace uses a concat reducer.
@@ -36,6 +39,10 @@ export const WhatsappCrewStateAnnotation = Annotation.Root({
   mediaInsights: Annotation<WhatsappMediaInsight[]>({
     reducer: (_current, update) => update ?? [],
     default: () => [],
+  }),
+  adversary: Annotation<AdversaryVerdict | null>({
+    reducer: (_current, update) => update,
+    default: () => null,
   }),
   plan: Annotation<WhatsappCrewPlan | null>({
     reducer: (_current, update) => update,
