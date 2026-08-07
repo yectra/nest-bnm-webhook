@@ -1,4 +1,4 @@
-export type ChatChannel = 'Website' | 'Teams';
+export type ChatChannel = 'Website' | 'Teams' | 'WhatsApp';
 
 export interface ConversationRecord {
   id?: string;

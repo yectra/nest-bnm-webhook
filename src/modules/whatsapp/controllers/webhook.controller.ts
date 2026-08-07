@@ -15,11 +15,11 @@ export class WebhookController {
 
   @Post('whatsapp')
   @Header('Content-Type', 'text/xml')
-  receiveWhatsappMessage(
+  async receiveWhatsappMessage(
     @Req() request: Request,
     @Body() body?: Record<string, string>,
   ) {
-    const response = this.webhookService.receive(request, body ?? {});
+    const response = await this.webhookService.receive(request, body ?? {});
 
     return response.xml;
   }

@@ -45,6 +45,7 @@ import { CrewDispatchService } from './services/crew-dispatch.service';
     AgentCrewGateway,
     AgentCrewService,
   ],
-  exports: [AgentCrewService],
+  // CrewLlmProvider and PiiFilterService are shared with the WhatsApp crew.
+  exports: [AgentCrewService, CrewLlmProvider, PiiFilterService],
 })
 export class AgentCrewModule {}

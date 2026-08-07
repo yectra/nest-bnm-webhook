@@ -16,6 +16,8 @@ import { BotModule } from './modules/bot/bot.module';
 import { EmbeddingModule } from './modules/embedding/embedding.module';
 import { SearchModule } from './modules/search/search.module';
 import { AgentCrewModule } from './modules/agent-crew/agent-crew.module';
+import { AzureEventsModule } from './modules/azure-events/azure-events.module';
+import { WhatsappCrewModule } from './modules/whatsapp-crew/whatsapp-crew.module';
 
 @Module({
   imports: [
@@ -73,6 +75,19 @@ import { AgentCrewModule } from './modules/agent-crew/agent-crew.module';
           .min(1)
           .default('PostYourRequirements'),
         AGENT_CREW_PII_LLM_REVIEW: Joi.boolean().default(true),
+        // WhatsApp agent crew: async processing of Twilio WhatsApp messages
+        // through Azure Event Grid. When the topic is not configured, events
+        // are processed via the in-process fallback bus instead.
+        WHATSAPP_CREW_ENABLED: Joi.boolean().default(true),
+        WHATSAPP_CREW_PROJECT_CONTAINER: Joi.string().min(1).default('Project'),
+        WHATSAPP_CREW_FEEDBACK_CONTAINER: Joi.string()
+          .min(1)
+          .default('Feedback'),
+        AZURE_EVENT_GRID_TOPIC_ENDPOINT: Joi.string().uri().optional(),
+        AZURE_EVENT_GRID_TOPIC_KEY: Joi.string().min(1).optional(),
+        // Shared secret required as ?code= on the Event Grid subscription
+        // endpoint when set.
+        AZURE_EVENT_GRID_WEBHOOK_SECRET: Joi.string().min(16).optional(),
         CHATBOT_VECTOR_MIN_SIMILARITY: Joi.number().min(-1).max(1).default(0.7),
         COSMOS_ENDPOINT: Joi.string().uri().required(),
         COSMOS_KEY: Joi.string().min(1).required(),
@@ -104,6 +119,10 @@ import { AgentCrewModule } from './modules/agent-crew/agent-crew.module';
     SearchModule,
 
     AgentCrewModule,
+
+    AzureEventsModule,
+
+    WhatsappCrewModule,
   ],
 })
 export class AppModule {}
