@@ -97,6 +97,7 @@ export class TeamsBot extends ActivityHandler {
           websiteConversationId,
         );
       }
+    }
 
       const mapKeys = this.notificationService.getMapKeys().join(', ');
       this.logger.log(
