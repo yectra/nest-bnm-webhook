@@ -11,6 +11,13 @@ export class WebsiteRealtimeService {
     private readonly chatGateway: ChatGateway,
   ) {}
 
+  private extraEmitters: ((record: ConversationRecord) => void)[] = [];
+
+  /** Allow other modules (like AgentCrewGateway) to register for realtime updates */
+  registerEmitter(emitter: (record: ConversationRecord) => void): void {
+    this.extraEmitters.push(emitter);
+  }
+
   /** Emit new conversation record to connected website clients in real-time */
   notifyWebsiteClients(record: ConversationRecord): void {
     try {
@@ -22,6 +29,14 @@ export class WebsiteRealtimeService {
       this.logger.log(
         `[TeamsRelay] Website realtime event 'conversationUpdated' emitted for conversationId=${record.conversationId}`,
       );
+
+      for (const emitter of this.extraEmitters) {
+        try {
+          emitter(record);
+        } catch (err) {
+          this.logger.error('Error in extra realtime emitter', err);
+        }
+      }
     } catch (error) {
       this.logger.warn(
         `Failed to emit website realtime update for conversationId=${record.conversationId}`,

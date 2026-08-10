@@ -7,10 +7,11 @@ import {
   MessageBody,
   ConnectedSocket,
 } from '@nestjs/websockets';
-import { Logger, Inject, forwardRef } from '@nestjs/common';
+import { Logger, Inject, forwardRef, OnModuleInit } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { AgentCrewService } from './agent-crew.service';
 import { CrewMessageDto } from './dto/crew-message.dto';
+import { WebsiteRealtimeService } from '../chatbot/services/website-realtime.service';
 
 /**
  * WebSocket entry/exit point for the agent crew. Clients join a session room
@@ -24,7 +25,7 @@ import { CrewMessageDto } from './dto/crew-message.dto';
   namespace: 'api/agent-crew',
 })
 export class AgentCrewGateway
-  implements OnGatewayConnection, OnGatewayDisconnect
+  implements OnGatewayConnection, OnGatewayDisconnect, OnModuleInit
 {
   private readonly logger = new Logger(AgentCrewGateway.name);
 
@@ -34,7 +35,38 @@ export class AgentCrewGateway
   constructor(
     @Inject(forwardRef(() => AgentCrewService))
     private readonly agentCrewService: AgentCrewService,
+    private readonly websiteRealtimeService: WebsiteRealtimeService,
   ) {}
+
+  onModuleInit() {
+    this.websiteRealtimeService.registerEmitter((record) => {
+      this.logger.log(`[AgentCrewGateway] Received realtime event for conversationId=${record.conversationId}, source=${record.source}`);
+      // If the record came from Teams, it was likely an agent reply/Teams reply
+      // The frontend listens to "crewResponse" on this gateway.
+      if (record.source === 'Teams') {
+        this.logger.log(`[AgentCrewGateway] Emitting 'crewResponse' to session ${record.conversationId}`);
+        const payload = {
+          success: true,
+          conversationId: record.conversationId,
+          userId: record.userId,
+          channel: record.channel,
+          question: record.question,
+          answer: record.answer,
+          response: record.answer, // UI might expect response instead of answer
+          timestamp: record.timestamp,
+          isTeamsReply: true,
+        };
+        
+        this.emitCrewResponse(record.conversationId, payload);
+        
+        // The UI might be listening for 'conversationUpdated' on this gateway too
+        if (this.server) {
+          this.server.to(record.conversationId).emit('conversationUpdated', record);
+          this.server.emit('conversationUpdated', record);
+        }
+      }
+    });
+  }
 
   handleConnection(client: Socket) {
     this.logger.log(`Agent crew client connected: ${client.id}`);
