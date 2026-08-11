@@ -11,6 +11,7 @@ import {
   AdversaryGuardMiddleware,
   REFUSAL_TEXT,
 } from '../guard/adversary-guard';
+import { createPiiFilterMiddleware } from '../pii/pii-filter';
 import { templateReply } from '../reply/templates';
 import { GeneratedReply, normalizePhone, WhatsAppMessage } from '../types';
 import { CheckpointerService } from './checkpointer.service';
@@ -110,13 +111,18 @@ export class SupportAgentService {
     guard?: AdversaryGuardMiddleware,
   ): Promise<GeneratedReply> {
     const phone = normalizePhone(message.from);
-    // Guard first (beforeAgent, ahead of any model call).
+    // Guard first (beforeAgent, ahead of any model call); PII filter last
+    // (afterAgent, sees the final assistant message of every completed run).
+    const middleware = [
+      ...(guard ? [guard] : []),
+      createPiiFilterMiddleware(phone),
+    ];
     const agent = createDeepAgent({
       model,
       tools: buildAgentTools(phone, dataSource),
       systemPrompt: SUPPORT_SYSTEM_PROMPT,
       checkpointer,
-      middleware: guard ? [guard] : [],
+      middleware,
     });
     const config: RunnableConfig = { configurable: { thread_id: phone } };
 
