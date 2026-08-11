@@ -81,6 +81,6 @@ export class GeneratorStub {
   }
 
   asService(): ReplyGeneratorService {
-    return this;
+    return this as unknown as ReplyGeneratorService;
   }
 }
