@@ -59,7 +59,16 @@ deep-agent turn — useful as a smoke test of the LLM configuration.
      (greeting/thanks/help/media/location/button/fallback).
 6. **PII filter.** The final text is redacted (see below) — on agent
    answers, refusals, and templates alike.
-7. **Send.** The reply goes out as a Twilio WhatsApp session message via
+7. **Kill switch.** `WHATSAPP_AGENT_REPLY_ENABLED=false` puts the service
+   in dry-run mode: the reply is generated, redacted, and audited, but
+   nothing is sent, the assistant turn stays out of history, and the SID is
+   marked processed (no redelivery).
+8. **Audit.** Every generated reply — sent, disabled, skipped, or failed —
+   is recorded in the `WhatsAppAgentAudit` container: final redacted text,
+   source (`agent`/`template`/`refusal`), the kill-switch value in effect
+   (`sendEnabled`), outcome status, Twilio SID when sent, and timestamp.
+   Audit-write failures are logged and never block the reply.
+9. **Send.** The reply goes out as a Twilio WhatsApp session message via
    `TWILIO_MESSAGING_SERVICE_SID` (falling back to
    `TWILIO_WHATSAPP_NUMBER`). Only when Twilio returns a SID is the
    assistant turn kept in conversation history; a failed send retracts the
@@ -147,6 +156,8 @@ agent) are covered too.
 | `WHATSAPP_AGENT_GUARD_BLOCK_THRESHOLD` | `0.82` | Similarity at/above which a message is blocked outright. |
 | `WHATSAPP_AGENT_GUARD_BORDERLINE_THRESHOLD` | `0.60` | Lower bound of the band escalated to the LLM classifier. |
 | `TWILIO_MESSAGING_SERVICE_SID` | _(unset)_ | Messaging service for outbound replies (falls back to `TWILIO_WHATSAPP_NUMBER`). |
+| `WHATSAPP_AGENT_REPLY_ENABLED` | `true` | Kill switch. `false`/`0`/`no`/`off` ⇒ replies are generated and audited but never sent. |
+| `WHATSAPP_AGENT_AUDIT_CONTAINER` | `WhatsAppAgentAudit` | Container receiving one audit row per generated reply (partition key `/id`). |
 
 Cosmos connectivity reuses the app's existing `COSMOS_ENDPOINT`,
 `COSMOS_KEY`, and `COSMOS_DATABASE` settings.
@@ -165,6 +176,8 @@ the message.
 | Learned-exemplar upsert error | Logged, reply proceeds |
 | Twilio send error | Turn retracted from history, 503 → Event Grid redelivers |
 | Twilio unconfigured | Reply generated + logged, marked processed |
+| Reply kill switch off | Reply generated + audited, never sent, turn kept out of history |
+| Audit write error | Logged, reply proceeds |
 
 ## Azure setup
 
@@ -186,6 +199,19 @@ The app's Cosmos account needs, in `$COSMOS_DATABASE`:
     --account-name <cosmos-account> --resource-group <rg> \
     --database-name <db> --name WhatsAppProcessedMessages \
     --partition-key-path /id --ttl 604800
+  ```
+
+- `WhatsAppAgentAudit` — for the reply audit trail, partition key `/id`.
+  One row per generated reply: `{ id, messageSid, phone, reply, source,
+  sendEnabled, status, replySid?, createdAt }`; `sendEnabled` records the
+  `WHATSAPP_AGENT_REPLY_ENABLED` value in effect, so dry-run rows are
+  distinguishable from live traffic.
+
+  ```bash
+  az cosmosdb sql container create \
+    --account-name <cosmos-account> --resource-group <rg> \
+    --database-name <db> --name WhatsAppAgentAudit \
+    --partition-key-path /id
   ```
 
 ### Event Grid push subscription

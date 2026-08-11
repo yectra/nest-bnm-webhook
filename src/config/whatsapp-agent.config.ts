@@ -26,6 +26,8 @@ export default registerAs('whatsappAgent', () => ({
     user: process.env.WHATSAPP_AGENT_USER_CONTAINER || 'User',
     /** Previously sent notifications (phoneNumber, renderedMessage, type, createdDate). */
     content: process.env.WHATSAPP_AGENT_CONTENT_CONTAINER || 'WhatsAppContent',
+    /** Audit trail: one row per generated reply (partition key /id). */
+    audit: process.env.WHATSAPP_AGENT_AUDIT_CONTAINER || 'WhatsAppAgentAudit',
   },
   twilio: {
     /** Messaging service for outbound WhatsApp session replies. */
@@ -46,6 +48,14 @@ export default registerAs('whatsappAgent', () => ({
     /** Must match the AdversarialInputs embedding policy. */
     dimensions: Number(process.env.WHATSAPP_AGENT_EMBEDDING_DIMENSIONS) || 1536,
   },
+  /**
+   * Kill switch for outbound replies. When false the agent still generates
+   * and audits a reply, but nothing is sent to the customer and the
+   * assistant turn is not recorded in conversation history.
+   */
+  replyEnabled: !['false', '0', 'no', 'off'].includes(
+    (process.env.WHATSAPP_AGENT_REPLY_ENABLED || 'true').trim().toLowerCase(),
+  ),
   guard: {
     /** Vector container of known prompt-injection exemplars. */
     adversarialContainer:
