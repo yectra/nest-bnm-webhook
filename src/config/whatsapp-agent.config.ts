@@ -22,6 +22,10 @@ export default registerAs('whatsappAgent', () => ({
     processed:
       process.env.WHATSAPP_AGENT_PROCESSED_CONTAINER ||
       'WhatsAppProcessedMessages',
+    /** Customer profiles used for grounding (phoneNumber, name, role). */
+    user: process.env.WHATSAPP_AGENT_USER_CONTAINER || 'User',
+    /** Previously sent notifications (phoneNumber, renderedMessage, type, createdDate). */
+    content: process.env.WHATSAPP_AGENT_CONTENT_CONTAINER || 'WhatsAppContent',
   },
   twilio: {
     /** Messaging service for outbound WhatsApp session replies. */

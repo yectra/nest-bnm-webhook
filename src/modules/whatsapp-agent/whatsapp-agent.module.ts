@@ -4,9 +4,12 @@ import { WhatsappModule } from '../whatsapp/whatsapp.module';
 import { HelloAgentController } from './controllers/hello-agent.controller';
 import { WhatsappEventController } from './controllers/whatsapp-event.controller';
 import { AgentModelService } from './services/agent-model.service';
+import { CheckpointerService } from './services/checkpointer.service';
+import { CustomerDataService } from './services/customer-data.service';
 import { DedupService } from './services/dedup.service';
 import { HelloAgentService } from './services/hello-agent.service';
 import { ReplyGeneratorService } from './services/reply-generator.service';
+import { SupportAgentService } from './services/support-agent.service';
 import { WhatsappEventHandlerService } from './services/whatsapp-event-handler.service';
 import { WhatsappReplyService } from './services/whatsapp-reply.service';
 
@@ -23,7 +26,10 @@ import { WhatsappReplyService } from './services/whatsapp-reply.service';
   controllers: [HelloAgentController, WhatsappEventController],
   providers: [
     AgentModelService,
+    CheckpointerService,
+    CustomerDataService,
     HelloAgentService,
+    SupportAgentService,
     DedupService,
     ReplyGeneratorService,
     WhatsappEventHandlerService,
