@@ -128,10 +128,20 @@ WHATSAPP_AGENT_LLM_MODEL=phi-4-mini-instruct
 
 All three are optional: with no base URL configured the endpoint returns a
 static reply instead of failing (the module is designed to fail open).
-Frontier models are never required. Later increments add the Event Grid
-consumer that answers inbound WhatsApp messages
-(`BNM_WHATSAPP_RECEIVED_FROM_JAVA_EVENT`), the grounded support agent, the
-adversarial-input guard, and the PII output filter.
+Frontier models are never required.
+
+`POST /api/whatsapp-agent/events` is the Azure Event Grid push-subscription
+endpoint. It answers the `Microsoft.EventGrid.SubscriptionValidationEvent`
+handshake, accepts a single event or an array, and processes
+`BNM_WHATSAPP_RECEIVED_FROM_JAVA_EVENT` events published by the existing
+Java webhook app. Each `messageSid` is recorded in the Cosmos container
+`WhatsAppProcessedMessages` (override: `WHATSAPP_AGENT_PROCESSED_CONTAINER`)
+and duplicates are skipped, failing open if the store errors. Replies are
+intent-based templates sent as Twilio WhatsApp session messages via
+`TWILIO_MESSAGING_SERVICE_SID` (falling back to `TWILIO_WHATSAPP_NUMBER`);
+a transport failure returns 503 so Event Grid redelivers. Later increments
+add the grounded support agent, the adversarial-input guard, and the PII
+output filter.
 
 ## LangGraph agent crew
 
