@@ -7,6 +7,10 @@ import type { BaseChatModel } from '@langchain/core/language_models/chat_models'
 import type { BaseCheckpointSaver } from '@langchain/langgraph';
 import type { RunnableConfig } from '@langchain/core/runnables';
 import { buildAgentTools } from '../agent/tools';
+import {
+  AdversaryGuardMiddleware,
+  REFUSAL_TEXT,
+} from '../guard/adversary-guard';
 import { templateReply } from '../reply/templates';
 import { GeneratedReply, normalizePhone, WhatsAppMessage } from '../types';
 import { CheckpointerService } from './checkpointer.service';
@@ -87,12 +91,14 @@ export class SupportAgentService {
   async generateReply(
     message: WhatsAppMessage,
     model: BaseChatModel,
+    guard?: AdversaryGuardMiddleware,
   ): Promise<GeneratedReply> {
     return this.generateWith(
       message,
       model,
       this.checkpointerService.get(),
       this.customerDataService,
+      guard,
     );
   }
 
@@ -101,13 +107,16 @@ export class SupportAgentService {
     model: BaseChatModel,
     checkpointer: BaseCheckpointSaver,
     dataSource: Pick<CustomerDataService, 'lookupCustomer' | 'recentContent'>,
+    guard?: AdversaryGuardMiddleware,
   ): Promise<GeneratedReply> {
     const phone = normalizePhone(message.from);
+    // Guard first (beforeAgent, ahead of any model call).
     const agent = createDeepAgent({
       model,
       tools: buildAgentTools(phone, dataSource),
       systemPrompt: SUPPORT_SYSTEM_PROMPT,
       checkpointer,
+      middleware: guard ? [guard] : [],
     });
     const config: RunnableConfig = { configurable: { thread_id: phone } };
 
@@ -123,6 +132,13 @@ export class SupportAgentService {
       },
       config,
     );
+
+    if ((result as { adversarialBlock?: boolean }).adversarialBlock) {
+      // The guard removed the flagged turn from state before any model
+      // call; nothing was added to history, so there is nothing to retract
+      // on send failure. Reply with the static refusal.
+      return { text: REFUSAL_TEXT, source: 'refusal' };
+    }
 
     const messages = result.messages as BaseMessage[];
     const text = extractFinalText(messages) || templateReply(message);

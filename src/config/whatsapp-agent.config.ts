@@ -31,4 +31,30 @@ export default registerAs('whatsappAgent', () => ({
     /** Messaging service for outbound WhatsApp session replies. */
     messagingServiceSid: process.env.TWILIO_MESSAGING_SERVICE_SID || undefined,
   },
+  embedding: {
+    /** Embedding model for the guard's semantic layer. */
+    model:
+      process.env.WHATSAPP_AGENT_EMBEDDING_MODEL || 'text-embedding-3-small',
+    baseUrl:
+      process.env.WHATSAPP_AGENT_EMBEDDING_BASE_URL ||
+      process.env.WHATSAPP_AGENT_LLM_BASE_URL ||
+      undefined,
+    apiKey:
+      process.env.WHATSAPP_AGENT_EMBEDDING_API_KEY ||
+      process.env.WHATSAPP_AGENT_LLM_API_KEY ||
+      undefined,
+    /** Must match the AdversarialInputs embedding policy. */
+    dimensions: Number(process.env.WHATSAPP_AGENT_EMBEDDING_DIMENSIONS) || 1536,
+  },
+  guard: {
+    /** Vector container of known prompt-injection exemplars. */
+    adversarialContainer:
+      process.env.WHATSAPP_AGENT_ADVERSARIAL_CONTAINER || 'AdversarialInputs',
+    /** Similarity at or above which a message is blocked outright. */
+    blockThreshold:
+      Number(process.env.WHATSAPP_AGENT_GUARD_BLOCK_THRESHOLD) || 0.82,
+    /** Lower bound of the borderline band escalated to the LLM classifier. */
+    borderlineThreshold:
+      Number(process.env.WHATSAPP_AGENT_GUARD_BORDERLINE_THRESHOLD) || 0.6,
+  },
 }));

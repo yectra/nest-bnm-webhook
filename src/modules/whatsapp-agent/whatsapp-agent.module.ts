@@ -7,6 +7,7 @@ import { AgentModelService } from './services/agent-model.service';
 import { CheckpointerService } from './services/checkpointer.service';
 import { CustomerDataService } from './services/customer-data.service';
 import { DedupService } from './services/dedup.service';
+import { GuardService } from './services/guard.service';
 import { HelloAgentService } from './services/hello-agent.service';
 import { ReplyGeneratorService } from './services/reply-generator.service';
 import { SupportAgentService } from './services/support-agent.service';
@@ -31,6 +32,7 @@ import { WhatsappReplyService } from './services/whatsapp-reply.service';
     HelloAgentService,
     SupportAgentService,
     DedupService,
+    GuardService,
     ReplyGeneratorService,
     WhatsappEventHandlerService,
     WhatsappReplyService,
