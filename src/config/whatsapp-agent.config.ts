@@ -13,4 +13,18 @@ export default registerAs('whatsappAgent', () => ({
     /** Frontier models are never required. */
     model: process.env.WHATSAPP_AGENT_LLM_MODEL || 'phi-4-mini-instruct',
   },
+  /** Event type published by the upstream Java webhook app. */
+  eventType:
+    process.env.WHATSAPP_AGENT_EVENT_TYPE ||
+    'BNM_WHATSAPP_RECEIVED_FROM_JAVA_EVENT',
+  containers: {
+    /** Processed messageSids for idempotency (partition key /id). */
+    processed:
+      process.env.WHATSAPP_AGENT_PROCESSED_CONTAINER ||
+      'WhatsAppProcessedMessages',
+  },
+  twilio: {
+    /** Messaging service for outbound WhatsApp session replies. */
+    messagingServiceSid: process.env.TWILIO_MESSAGING_SERVICE_SID || undefined,
+  },
 }));
