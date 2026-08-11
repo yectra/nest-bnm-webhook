@@ -1,4 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { AuditEntry, AuditService } from './audit.service';
 import { DedupService } from './dedup.service';
 import { ReplyGeneratorService } from './reply-generator.service';
 import { SendResult, WhatsappReplyService } from './whatsapp-reply.service';
@@ -14,12 +16,14 @@ import {
 /**
  * Process one BNM_WHATSAPP_RECEIVED_FROM_JAVA_EVENT payload:
  * dedup check (fail open) -> generate reply (fail open to templates) ->
- * send via Twilio -> mark processed.
+ * PII redaction -> kill switch -> send via Twilio -> mark processed.
+ * Every generated reply is audited with the kill-switch value in effect.
  *
- * The SID is only marked processed when the message no longer needs an Event
- * Grid retry: after a successful send, or when sending is impossible
- * (Twilio unconfigured). A transport failure leaves the SID unmarked so the
- * next delivery attempt can try again.
+ * The SID is only marked processed when the message no longer needs an
+ * Event Grid retry: after a successful send, when sending is impossible
+ * (Twilio unconfigured), or when sending is disabled by the kill switch. A
+ * transport failure leaves the SID unmarked so the next delivery attempt
+ * can try again.
  */
 @Injectable()
 export class WhatsappEventHandlerService {
@@ -29,6 +33,8 @@ export class WhatsappEventHandlerService {
     private readonly dedupService: DedupService,
     private readonly replyGenerator: ReplyGeneratorService,
     private readonly replySender: WhatsappReplyService,
+    private readonly auditService: AuditService,
+    private readonly configService: ConfigService,
   ) {}
 
   async handle(message: WhatsAppMessage): Promise<ProcessOutcome> {
@@ -57,6 +63,25 @@ export class WhatsappEventHandlerService {
     // agent answers is a no-op.
     reply.text = redactPII(reply.text, normalizePhone(message.from));
 
+    const sendEnabled =
+      this.configService.get<boolean>('whatsappAgent.replyEnabled') ?? true;
+
+    if (!sendEnabled) {
+      // Kill switch on: never send, keep the assistant turn out of
+      // history, but audit the reply and mark the SID processed (no
+      // redelivery needed).
+      this.logger.log(
+        `reply sending disabled; reply for ${message.messageSid} not sent: ${reply.text}`,
+      );
+      await this.notifySendOutcome(reply, undefined);
+      await this.audit(message, reply, sendEnabled, 'send-disabled');
+      await this.dedupService.markProcessed(message.messageSid, {
+        from: message.from,
+        replySid: null,
+      });
+      return { status: 'send-disabled', reply: reply.text };
+    }
+
     let sendResult: SendResult;
     try {
       sendResult = await this.replySender.send(message.from, reply.text);
@@ -65,10 +90,13 @@ export class WhatsappEventHandlerService {
         `Twilio send failed for ${message.messageSid}: ${String(error)}`,
       );
       await this.notifySendOutcome(reply, undefined);
+      await this.audit(message, reply, sendEnabled, 'send-failed');
       return { status: 'send-failed', reply: reply.text };
     }
 
     await this.notifySendOutcome(reply, sendResult.sid);
+    const status = sendResult.skipped ? 'send-skipped' : 'replied';
+    await this.audit(message, reply, sendEnabled, status, sendResult.sid);
     await this.dedupService.markProcessed(message.messageSid, {
       from: message.from,
       replySid: sendResult.sid ?? null,
@@ -85,6 +113,24 @@ export class WhatsappEventHandlerService {
       replySid: sendResult.sid as string,
       reply: reply.text,
     };
+  }
+
+  private async audit(
+    message: WhatsAppMessage,
+    reply: GeneratedReply,
+    sendEnabled: boolean,
+    status: AuditEntry['status'],
+    replySid?: string,
+  ): Promise<void> {
+    await this.auditService.record({
+      messageSid: message.messageSid,
+      phone: normalizePhone(message.from),
+      reply: reply.text,
+      source: reply.source ?? 'template',
+      sendEnabled,
+      status,
+      ...(replySid ? { replySid } : {}),
+    });
   }
 
   private async notifySendOutcome(

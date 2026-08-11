@@ -3,11 +3,10 @@ import { redactPII } from './redact';
 import { SupportAgentService } from '../services/support-agent.service';
 import { CheckpointerService } from '../services/checkpointer.service';
 import { CustomerDataService } from '../services/customer-data.service';
-import { WhatsappEventHandlerService } from '../services/whatsapp-event-handler.service';
 import {
   GeneratorStub,
+  makeHandlerSetup,
   makeMessage,
-  MemoryDedupStub,
   SenderStub,
 } from '../testing/agent-test.helpers';
 
@@ -122,11 +121,7 @@ describe('handler-level PII pass (refusals and templates too)', () => {
         text: 'Escalated to ops@example.com, ref 123456789012345',
       }),
     );
-    const handler = new WhatsappEventHandlerService(
-      new MemoryDedupStub().asService(),
-      generator.asService(),
-      sender.asService(),
-    );
+    const { handler } = makeHandlerSetup({ sender, generator });
     const outcome = await handler.handle(makeMessage());
     expect(outcome.status).toBe('replied');
     expect(sender.calls[0].body).not.toContain('ops@example.com');

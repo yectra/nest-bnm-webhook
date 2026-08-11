@@ -1,32 +1,10 @@
-import { WhatsappEventHandlerService } from './whatsapp-event-handler.service';
 import {
   GeneratorStub,
+  makeHandlerSetup as makeHandler,
   makeMessage,
   MemoryDedupStub,
   SenderStub,
 } from '../testing/agent-test.helpers';
-
-function makeHandler(
-  overrides: {
-    dedup?: MemoryDedupStub;
-    sender?: SenderStub;
-    generator?: GeneratorStub;
-  } = {},
-) {
-  const dedup = overrides.dedup ?? new MemoryDedupStub();
-  const sender = overrides.sender ?? new SenderStub('ok');
-  const generator =
-    overrides.generator ??
-    new GeneratorStub(() =>
-      Promise.resolve({ text: 'generated reply', source: 'template' }),
-    );
-  const handler = new WhatsappEventHandlerService(
-    dedup.asService(),
-    generator.asService(),
-    sender.asService(),
-  );
-  return { handler, dedup, sender, generator };
-}
 
 describe('WhatsappEventHandlerService', () => {
   it('replies and records the SID as processed', async () => {

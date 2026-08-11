@@ -73,6 +73,7 @@ export interface GeneratedReply {
 
 export type ProcessOutcome =
   | { status: 'replied'; replySid: string; reply: string }
+  | { status: 'send-disabled'; reply: string }
   | { status: 'send-skipped'; reply: string }
   | { status: 'send-failed'; reply: string }
   | { status: 'duplicate' }

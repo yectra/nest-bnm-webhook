@@ -1,9 +1,12 @@
+import { ConfigService } from '@nestjs/config';
+import { AuditEntry, AuditService } from '../services/audit.service';
 import { DedupService } from '../services/dedup.service';
 import { ReplyGeneratorService } from '../services/reply-generator.service';
 import {
   SendResult,
   WhatsappReplyService,
 } from '../services/whatsapp-reply.service';
+import { WhatsappEventHandlerService } from '../services/whatsapp-event-handler.service';
 import { GeneratedReply, WhatsAppMessage } from '../types';
 
 export function makeMessage(
@@ -83,4 +86,65 @@ export class GeneratorStub {
   asService(): ReplyGeneratorService {
     return this as unknown as ReplyGeneratorService;
   }
+}
+
+export class AuditStub {
+  entries: AuditEntry[] = [];
+  failOnRecord = false;
+
+  record(entry: AuditEntry): Promise<void> {
+    if (this.failOnRecord) {
+      // The real AuditService fails open internally; this stub simulates
+      // the post-fail-open result (nothing recorded) for handler tests.
+      return Promise.resolve();
+    }
+    this.entries.push(entry);
+    return Promise.resolve();
+  }
+
+  asService(): AuditService {
+    return this as unknown as AuditService;
+  }
+}
+
+export interface HandlerSetup {
+  handler: WhatsappEventHandlerService;
+  dedup: MemoryDedupStub;
+  sender: SenderStub;
+  generator: GeneratorStub;
+  audit: AuditStub;
+}
+
+/** Build a handler wired to stubs; override any piece per test. */
+export function makeHandlerSetup(
+  overrides: {
+    dedup?: MemoryDedupStub;
+    sender?: SenderStub;
+    generator?: GeneratorStub;
+    audit?: AuditStub;
+    replyEnabled?: boolean;
+  } = {},
+): HandlerSetup {
+  const dedup = overrides.dedup ?? new MemoryDedupStub();
+  const sender = overrides.sender ?? new SenderStub('ok');
+  const generator =
+    overrides.generator ??
+    new GeneratorStub(() =>
+      Promise.resolve({ text: 'generated reply', source: 'template' }),
+    );
+  const audit = overrides.audit ?? new AuditStub();
+  const configService = {
+    get: (key: string) =>
+      key === 'whatsappAgent.replyEnabled'
+        ? (overrides.replyEnabled ?? true)
+        : undefined,
+  } as unknown as ConfigService;
+  const handler = new WhatsappEventHandlerService(
+    dedup.asService(),
+    generator.asService(),
+    sender.asService(),
+    audit.asService(),
+    configService,
+  );
+  return { handler, dedup, sender, generator, audit };
 }
