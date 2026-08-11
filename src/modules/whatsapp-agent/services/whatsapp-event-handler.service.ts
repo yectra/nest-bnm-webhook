@@ -2,8 +2,14 @@ import { Injectable, Logger } from '@nestjs/common';
 import { DedupService } from './dedup.service';
 import { ReplyGeneratorService } from './reply-generator.service';
 import { SendResult, WhatsappReplyService } from './whatsapp-reply.service';
+import { redactPII } from '../pii/redact';
 import { templateReply } from '../reply/templates';
-import { GeneratedReply, ProcessOutcome, WhatsAppMessage } from '../types';
+import {
+  GeneratedReply,
+  normalizePhone,
+  ProcessOutcome,
+  WhatsAppMessage,
+} from '../types';
 
 /**
  * Process one BNM_WHATSAPP_RECEIVED_FROM_JAVA_EVENT payload:
@@ -44,6 +50,12 @@ export class WhatsappEventHandlerService {
       );
       reply = { text: templateReply(message), source: 'template' };
     }
+
+    // Final PII pass on every outbound text. Agent answers were already
+    // redacted by the afterAgent middleware; refusals and templates only
+    // pass through here. redactPII is idempotent, so the double pass on
+    // agent answers is a no-op.
+    reply.text = redactPII(reply.text, normalizePhone(message.from));
 
     let sendResult: SendResult;
     try {
