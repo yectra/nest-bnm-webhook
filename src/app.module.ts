@@ -6,6 +6,7 @@ import appConfig from './config/app.config';
 import twilioConfig from './config/twilio.config';
 import azureConfig from './config/azure.config';
 import databaseConfig from './config/database.config';
+import whatsappAgentConfig from './config/whatsapp-agent.config';
 
 import { HealthModule } from './modules/health/health.module';
 import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
@@ -16,13 +17,20 @@ import { BotModule } from './modules/bot/bot.module';
 import { EmbeddingModule } from './modules/embedding/embedding.module';
 import { SearchModule } from './modules/search/search.module';
 import { AgentCrewModule } from './modules/agent-crew/agent-crew.module';
+import { WhatsappAgentModule } from './modules/whatsapp-agent/whatsapp-agent.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
-      load: [appConfig, twilioConfig, azureConfig, databaseConfig],
+      load: [
+        appConfig,
+        twilioConfig,
+        azureConfig,
+        databaseConfig,
+        whatsappAgentConfig,
+      ],
       validationSchema: Joi.object({
         NODE_ENV: Joi.string()
           .valid('development', 'test', 'production')
@@ -77,6 +85,10 @@ import { AgentCrewModule } from './modules/agent-crew/agent-crew.module';
         COSMOS_ENDPOINT: Joi.string().uri().required(),
         COSMOS_KEY: Joi.string().min(1).required(),
         COSMOS_DATABASE: Joi.string().min(1).required(),
+        // WhatsApp Agent LLM optional config
+        WHATSAPP_AGENT_LLM_BASE_URL: Joi.string().uri().optional(),
+        WHATSAPP_AGENT_LLM_API_KEY: Joi.string().optional(),
+        WHATSAPP_AGENT_LLM_MODEL: Joi.string().optional(),
         // Embedding preview/backfill routes are administrative and must never be
         // exposed without a key in production.
         API_KEY: Joi.when('NODE_ENV', {
@@ -104,6 +116,7 @@ import { AgentCrewModule } from './modules/agent-crew/agent-crew.module';
     SearchModule,
 
     AgentCrewModule,
+    WhatsappAgentModule,
   ],
 })
 export class AppModule {}

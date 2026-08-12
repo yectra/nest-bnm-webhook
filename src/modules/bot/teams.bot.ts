@@ -76,6 +76,18 @@ export class TeamsBot extends ActivityHandler {
         );
       }
 
+      // Fallback 1: Extract thread root message ID from conversation ID in Teams (for threaded channel replies)
+      if (!websiteConversationId && context.activity.conversation?.id) {
+        const convId = context.activity.conversation.id;
+        const match = convId.match(/messageid=([^;]+)/);
+        if (match && match[1]) {
+          websiteConversationId = this.notificationService.getWebsiteConversationId(match[1]);
+        }
+      }
+
+      // Fallback 2: If they didn't reply to a specific message/thread, route to the active conversation
+      if (!websiteConversationId) {
+        websiteConversationId = this.notificationService.getActiveWebsiteConversationId();
       if (websiteConversationId) {
         this.notificationService.registerConversationLink(
           teamsConversationId ?? 'teams-default-session',
@@ -85,6 +97,7 @@ export class TeamsBot extends ActivityHandler {
           websiteConversationId,
         );
       }
+    }
 
       const mapKeys = this.notificationService.getMapKeys().join(', ');
       this.logger.log(
