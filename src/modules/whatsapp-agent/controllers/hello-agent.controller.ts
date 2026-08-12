@@ -18,7 +18,7 @@ export class HelloAgentController {
 
   @Post()
   async helloPost(@Body() body: HelloAgentDto) {
-    const reply = await this.helloAgentService.run(body.message || 'Hello!');
+    const reply = await this.helloAgentService.run(body.message || 'Kannan!');
     return { success: true, reply };
   }
 }

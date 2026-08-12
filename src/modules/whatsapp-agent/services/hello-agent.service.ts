@@ -4,7 +4,7 @@ import type { BaseChatModel } from '@langchain/core/language_models/chat_models'
 import { AgentModelService } from './agent-model.service';
 
 const HELLO_SYSTEM_PROMPT =
-  'You are a friendly greeter. Reply to the user in one short plain-text sentence.';
+  'You are a friendly orchestrator first greet the user and give info on token used for the current agent invocation.';
 
 /** Reply used whenever no LLM is configured — the service never hard-fails. */
 export const NO_LLM_REPLY =
