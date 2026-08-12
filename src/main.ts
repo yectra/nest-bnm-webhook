@@ -26,8 +26,9 @@ async function bootstrap() {
     origin: '*',
   });
 
-  // Swagger is a public endpoint too; don't expose it in the main environment.
-  if ((process.env.APP_ENV || '').toLowerCase() !== 'main') {
+  // Swagger is a public endpoint too; don't expose it in the main environment
+  // (the default when APP_ENV is not set).
+  if ((process.env.APP_ENV || 'main').toLowerCase() !== 'main') {
     const config = new DocumentBuilder()
       .setTitle('Company Backend')
       .setDescription('Backend APIs')

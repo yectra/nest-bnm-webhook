@@ -38,9 +38,9 @@ describe('MainEnvBlockGuard', () => {
     expect(guard.canActivate()).toBe(true);
   });
 
-  it('allows requests when the env is not configured', () => {
+  it('blocks requests when the env is not configured (defaults to main)', () => {
     const guard = buildGuard(undefined);
 
-    expect(guard.canActivate()).toBe(true);
+    expect(() => guard.canActivate()).toThrow(ForbiddenException);
   });
 });

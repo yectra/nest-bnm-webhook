@@ -54,9 +54,10 @@ API_KEY=a-long-random-administrative-api-key
 
 Notes:
 
-- `APP_ENV` names the deployment environment (`dev`, `stage`, or `main`).
-  When set to `main`, every API call and public endpoint (including `/docs`)
-  is blocked with a `403 Forbidden` exception.
+- `APP_ENV` names the deployment environment (`dev`, `stage`, or `main`)
+  and defaults to `main` when not set. In `main`, every API call and public
+  endpoint (including `/docs`) is blocked with a `403 Forbidden` exception,
+  so set `APP_ENV=dev` or `APP_ENV=stage` to enable the API.
 - `APP_BASE_URL` should be your public Azure App Service URL.
 - `TWILIO_STATUS_CALLBACK_URL` is used when this app sends outbound WhatsApp messages.
 - `TWILIO_WEBHOOK_SECRET` is optional. Real Twilio requests are validated with the Twilio auth token.

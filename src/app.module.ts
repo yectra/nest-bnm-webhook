@@ -31,8 +31,9 @@ import { AgentCrewModule } from './modules/agent-crew/agent-crew.module';
           .valid('development', 'test', 'production')
           .default('development'),
         // Deployment environment matching the branch/slot (dev, stage, main).
-        // When set to "main", all API calls and public endpoints are blocked.
-        APP_ENV: Joi.string().valid('dev', 'stage', 'main').default('dev'),
+        // Defaults to "main", which blocks all API calls and public endpoints;
+        // set APP_ENV=dev or APP_ENV=stage to enable the API.
+        APP_ENV: Joi.string().valid('dev', 'stage', 'main').default('main'),
         PORT: Joi.number().port().default(3000),
         APP_BASE_URL: Joi.string().uri().optional(),
         TWILIO_ACCOUNT_SID: Joi.string().required(),
