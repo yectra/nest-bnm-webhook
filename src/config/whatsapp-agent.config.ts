@@ -13,4 +13,7 @@ export default registerAs('whatsappAgent', () => ({
     /** Frontier models are never required. */
     model: process.env.WHATSAPP_AGENT_LLM_MODEL || 'phi-4-mini-instruct',
   },
+  /** Cosmos container holding customer feedback items. */
+  feedbackContainer:
+    process.env.WHATSAPP_AGENT_FEEDBACK_CONTAINER || 'CustomerFeedback',
 }));

@@ -133,6 +133,12 @@ WHATSAPP_AGENT_LLM_MODEL=phi-4-mini-instruct
 
 All three are optional: with no base URL configured the endpoint returns a
 static reply instead of failing (the module is designed to fail open).
+
+The agent carries one tool, `get_customer_feedback_count`, which counts the
+items in the Cosmos DB customer feedback container
+(`WHATSAPP_AGENT_FEEDBACK_CONTAINER`, default `CustomerFeedback`) and works
+that count into the greeting. If Cosmos is unreachable the tool reports the
+count as unavailable and the agent still replies.
 Frontier models are never required. Later increments add the Event Grid
 consumer that answers inbound WhatsApp messages
 (`BNM_WHATSAPP_RECEIVED_FROM_JAVA_EVENT`), the grounded support agent, the

@@ -2,9 +2,14 @@ import { Injectable, Logger } from '@nestjs/common';
 import { createDeepAgent } from 'deepagents';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { AgentModelService } from './agent-model.service';
+import { CustomerFeedbackService } from './customer-feedback.service';
+import { buildCustomerFeedbackCountTool } from '../tools/customer-feedback-count.tool';
 
 const HELLO_SYSTEM_PROMPT =
-  'You are a friendly orchestrator first greet the user and give info on token used for the current agent invocation.';
+  'You are a friendly greeter. Before replying, call the ' +
+  'get_customer_feedback_count tool to learn how many customer feedback ' +
+  'items are in the database, then reply to the user in one short ' +
+  'plain-text sentence that greets them and mentions that count.';
 
 /** Reply used whenever no LLM is configured — the service never hard-fails. */
 export const NO_LLM_REPLY =
@@ -12,14 +17,19 @@ export const NO_LLM_REPLY =
 
 /**
  * Hello-world service proving the deep-agent stack (deepagents on
- * @langchain/langgraph) end to end inside NestJS. Fails open: any agent or
- * model error degrades to the static reply instead of surfacing an error.
+ * @langchain/langgraph) end to end inside NestJS. The agent carries one tool
+ * — the Cosmos customer-feedback counter — and works the count into its
+ * greeting. Fails open: any agent, tool, or model error degrades to a static
+ * reply instead of surfacing an error.
  */
 @Injectable()
 export class HelloAgentService {
   private readonly logger = new Logger(HelloAgentService.name);
 
-  constructor(private readonly agentModelService: AgentModelService) {}
+  constructor(
+    private readonly agentModelService: AgentModelService,
+    private readonly customerFeedbackService: CustomerFeedbackService,
+  ) {}
 
   async run(message: string): Promise<string> {
     const model = this.agentModelService.createModel();
@@ -37,6 +47,7 @@ export class HelloAgentService {
       const agent = createDeepAgent({
         model,
         systemPrompt: HELLO_SYSTEM_PROMPT,
+        tools: [buildCustomerFeedbackCountTool(this.customerFeedbackService)],
       });
       const result = await agent.invoke({
         messages: [{ role: 'user', content: message }],
