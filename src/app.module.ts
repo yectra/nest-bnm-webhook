@@ -1,6 +1,9 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
 import * as Joi from 'joi';
+
+import { MainEnvBlockGuard } from './common/guards/main-env-block.guard';
 
 import appConfig from './config/app.config';
 import twilioConfig from './config/twilio.config';
@@ -35,6 +38,10 @@ import { WhatsappAgentModule } from './modules/whatsapp-agent/whatsapp-agent.mod
         NODE_ENV: Joi.string()
           .valid('development', 'test', 'production')
           .default('development'),
+        // Deployment environment matching the branch/slot (dev, stage, main).
+        // Defaults to "main", which blocks all API calls and public endpoints;
+        // set APP_ENV=dev or APP_ENV=stage to enable the API.
+        APP_ENV: Joi.string().valid('dev', 'stage', 'main').default('main'),
         PORT: Joi.number().port().default(3000),
         APP_BASE_URL: Joi.string().uri().optional(),
         TWILIO_ACCOUNT_SID: Joi.string().required(),
@@ -117,6 +124,12 @@ import { WhatsappAgentModule } from './modules/whatsapp-agent/whatsapp-agent.mod
 
     AgentCrewModule,
     WhatsappAgentModule,
+  ],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: MainEnvBlockGuard,
+    },
   ],
 })
 export class AppModule {}
