@@ -1,6 +1,9 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
 import * as Joi from 'joi';
+
+import { MainEnvBlockGuard } from './common/guards/main-env-block.guard';
 
 import appConfig from './config/app.config';
 import twilioConfig from './config/twilio.config';
@@ -27,6 +30,9 @@ import { AgentCrewModule } from './modules/agent-crew/agent-crew.module';
         NODE_ENV: Joi.string()
           .valid('development', 'test', 'production')
           .default('development'),
+        // Deployment environment matching the branch/slot (dev, stage, main).
+        // When set to "main", all API calls and public endpoints are blocked.
+        APP_ENV: Joi.string().valid('dev', 'stage', 'main').default('dev'),
         PORT: Joi.number().port().default(3000),
         APP_BASE_URL: Joi.string().uri().optional(),
         TWILIO_ACCOUNT_SID: Joi.string().required(),
@@ -104,6 +110,12 @@ import { AgentCrewModule } from './modules/agent-crew/agent-crew.module';
     SearchModule,
 
     AgentCrewModule,
+  ],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: MainEnvBlockGuard,
+    },
   ],
 })
 export class AppModule {}

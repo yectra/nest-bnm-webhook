@@ -26,15 +26,18 @@ async function bootstrap() {
     origin: '*',
   });
 
-  const config = new DocumentBuilder()
-    .setTitle('Company Backend')
-    .setDescription('Backend APIs')
-    .setVersion('1.0')
-    .build();
+  // Swagger is a public endpoint too; don't expose it in the main environment.
+  if ((process.env.APP_ENV || '').toLowerCase() !== 'main') {
+    const config = new DocumentBuilder()
+      .setTitle('Company Backend')
+      .setDescription('Backend APIs')
+      .setVersion('1.0')
+      .build();
 
-  const document = SwaggerModule.createDocument(app, config);
+    const document = SwaggerModule.createDocument(app, config);
 
-  SwaggerModule.setup('docs', app, document);
+    SwaggerModule.setup('docs', app, document);
+  }
 
   await app.listen(process.env.PORT || 3000);
 }
