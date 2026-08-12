@@ -31,7 +31,6 @@ export class AgentModelService {
       configuration: {
         baseURL: this.configService.get<string>('whatsappAgent.llm.baseUrl'),
       },
-      temperature: 0,
       maxRetries: 1,
       timeout: 30_000,
     });

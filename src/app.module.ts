@@ -85,6 +85,10 @@ import { WhatsappAgentModule } from './modules/whatsapp-agent/whatsapp-agent.mod
         COSMOS_ENDPOINT: Joi.string().uri().required(),
         COSMOS_KEY: Joi.string().min(1).required(),
         COSMOS_DATABASE: Joi.string().min(1).required(),
+        // WhatsApp Agent LLM optional config
+        WHATSAPP_AGENT_LLM_BASE_URL: Joi.string().uri().optional(),
+        WHATSAPP_AGENT_LLM_API_KEY: Joi.string().optional(),
+        WHATSAPP_AGENT_LLM_MODEL: Joi.string().optional(),
         // Embedding preview/backfill routes are administrative and must never be
         // exposed without a key in production.
         API_KEY: Joi.when('NODE_ENV', {
