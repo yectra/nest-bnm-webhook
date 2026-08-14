@@ -5,10 +5,23 @@ import { TwilioService } from './services/twilio.service';
 import { MessageService } from './services/message.service';
 import { WebhookService } from './services/webhook.service';
 import { CallbackService } from './services/callback.service';
+import { EventGridService } from './services/event-grid.service';
 
 @Module({
   controllers: [WebhookController, MessageController],
-  providers: [TwilioService, MessageService, WebhookService, CallbackService],
-  exports: [TwilioService, MessageService, WebhookService, CallbackService],
+  providers: [
+    TwilioService,
+    MessageService,
+    WebhookService,
+    CallbackService,
+    EventGridService,
+  ],
+  exports: [
+    TwilioService,
+    MessageService,
+    WebhookService,
+    CallbackService,
+    EventGridService,
+  ],
 })
 export class WhatsappModule {}
