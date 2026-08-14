@@ -18,7 +18,8 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "jest --config ./test/jest-e2e.json"
+    "test:e2e": "jest --config ./test/jest-e2e.json",
+    "postinstall": "node -e \"const fs=require('fs'),path=require('path');const target=path.join('node_modules','.pnpm','p-retry@7.1.1','node_modules','p-retry');if(!fs.existsSync(target)){fs.mkdirSync(path.dirname(target),{recursive:true});try{fs.cpSync(path.join('node_modules','p-retry'),target,{recursive:true});}catch(e){}}\""
   },
   "dependencies": {
     "@azure/cosmos": "^4.9.3",
@@ -37,6 +38,7 @@
     "class-validator": "^0.15.1",
     "joi": "^18.2.3",
     "openai": "^6.47.0",
+    "p-retry": "^7.1.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "socket.io": "^4.8.3",
