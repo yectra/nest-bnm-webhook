@@ -119,6 +119,25 @@ Configure chatbot retrieval with `CHATBOT_VECTOR_TOP_K` (default `5`) and
 keyword fallback: if native Cosmos vector search returns no result above the
 threshold, it responds with `No relevant information found.`
 
+## WhatsApp deep agent (hello world)
+
+`GET/POST /api/hello-agent` runs one turn of a [deep agent]
+(https://github.com/langchain-ai/deepagentsjs) built with `createDeepAgent`
+on `@langchain/langgraph`, using a LOW-COST OpenAI-compatible endpoint:
+
+```env
+WHATSAPP_AGENT_LLM_BASE_URL=https://your-low-cost-endpoint/v1
+WHATSAPP_AGENT_LLM_API_KEY=your-key
+WHATSAPP_AGENT_LLM_MODEL=phi-4-mini-instruct
+```
+
+All three are optional: with no base URL configured the endpoint returns a
+static reply instead of failing (the module is designed to fail open).
+Frontier models are never required. Later increments add the Event Grid
+consumer that answers inbound WhatsApp messages
+(`BNM_WHATSAPP_RECEIVED_FROM_JAVA_EVENT`), the grounded support agent, the
+adversarial-input guard, and the PII output filter.
+
 ## LangGraph agent crew
 
 `POST /api/agent-crew/chat` (and the Socket.IO namespace `api/agent-crew`)
