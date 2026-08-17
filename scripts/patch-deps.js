@@ -1,6 +1,40 @@
 const fs = require('fs');
 const path = require('path');
 
+// 1. Remove nested ESM p-retry / p-queue inside @langchain/langgraph-sdk if present
+const nestedPClient = path.join(
+  __dirname,
+  '..',
+  'node_modules',
+  '@langchain',
+  'langgraph-sdk',
+  'node_modules',
+  'p-retry',
+);
+if (fs.existsSync(nestedPClient)) {
+  try {
+    fs.rmSync(nestedPClient, { recursive: true, force: true });
+    console.log('[patch-deps] Removed nested ESM p-retry in langgraph-sdk');
+  } catch (e) {}
+}
+
+const nestedPQueue = path.join(
+  __dirname,
+  '..',
+  'node_modules',
+  '@langchain',
+  'langgraph-sdk',
+  'node_modules',
+  'p-queue',
+);
+if (fs.existsSync(nestedPQueue)) {
+  try {
+    fs.rmSync(nestedPQueue, { recursive: true, force: true });
+    console.log('[patch-deps] Removed nested ESM p-queue in langgraph-sdk');
+  } catch (e) {}
+}
+
+// 2. Patch async_caller.cjs and async_caller.js to use root CJS dependencies
 ['async_caller.cjs', 'async_caller.js'].forEach((filename) => {
   const filePath = path.join(
     __dirname,
