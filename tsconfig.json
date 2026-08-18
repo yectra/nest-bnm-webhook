@@ -3,6 +3,9 @@
     "module": "nodenext",
     "moduleResolution": "nodenext",
     "resolvePackageJsonExports": true,
+    // The WhatsApp agent loads its known-prompt-injection corpus from a JSON
+    // resource file bundled with the code.
+    "resolveJsonModule": true,
     "esModuleInterop": true,
     "isolatedModules": true,
     "declaration": true,

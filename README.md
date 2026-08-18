@@ -133,10 +133,10 @@ WHATSAPP_AGENT_LLM_MODEL=phi-4-mini-instruct
 
 All three are optional: with no base URL configured the endpoint returns a
 static reply instead of failing (the module is designed to fail open).
-Frontier models are never required. Later increments add the Event Grid
-consumer that answers inbound WhatsApp messages
-(`BNM_WHATSAPP_RECEIVED_FROM_JAVA_EVENT`), the grounded support agent, the
-adversarial-input guard, and the PII output filter.
+Frontier models are never required. Later increments add the grounded support
+agent that answers inbound WhatsApp messages
+(`BNM_WHATSAPP_RECEIVED_FROM_JAVA_EVENT`), the adversarial-input guard, and
+the PII output filter.
 
 ### LangSmith tracing
 
@@ -177,6 +177,95 @@ exactly as it did before. Notes:
   flushed too, and a failed upload is logged without affecting the reply.
 - The prompt and the reply are part of a trace, so treat the LangSmith
   project as holding the same data as the conversation itself.
+
+## Known-prompt-injection RAG
+
+The WhatsApp agent qualifies every event delivered to
+`POST /api/webhook/event-grid` before it is handled. An event that qualifies as
+an update of the prompt-injection RAG branches into a full rebuild of the
+corpus that grounds the agent's adversarial-input guard; every other event
+follows the existing path unchanged.
+
+An event qualifies when its `eventType`, `subject`, or `data` names the update.
+Matching is on a normalised form, so all of these are accepted:
+
+```jsonc
+{ "eventType": "BNM_WHATSAPP_UPDATE_PROMPT_INJECTION_RAG_EVENT" }
+{ "eventType": "UPDATE_PROMPT_INJECTION_RAG" }
+{ "subject": "whatsapp/agent/update-prompt-injection-rag" }
+{ "eventType": "BNM_GENERIC_EVENT", "data": { "action": "Update Prompt Injection RAG" } }
+```
+
+The rebuild is a LangGraph pipeline:
+
+```
+START -> loadCorpus -> chunkCorpus -> embedChunks -> deleteExistingRag -> persistRag -> END
+```
+
+- **loadCorpus** reads the known prompt injections from the versioned resource
+  file `src/modules/whatsapp-agent/resources/prompt-injections.json`. The
+  corpus ships with the code, so a rebuild is reproducible and needs no
+  network access.
+- **chunkCorpus** renders each record (technique, phrasings, example,
+  detection guidance, recommended action) and splits it into overlapping
+  chunks with LangChain's `RecursiveCharacterTextSplitter`, which keeps the
+  largest structural unit that fits (paragraph before line before word).
+- **embedChunks** embeds the chunks in batches through the same Azure OpenAI
+  deployment as the rest of the app.
+- **deleteExistingRag** deletes the existing RAG, if any, from Cosmos DB. It
+  runs *after* embedding on purpose: if loading, chunking, or embedding fails,
+  the previous corpus stays in place rather than leaving the guard with no RAG
+  at all. The purge is scoped to documents this RAG owns.
+- **persistRag** writes the embedded chunks to the DiskANN vector container.
+
+Configuration (all optional — the defaults below apply):
+
+```env
+PROMPT_INJECTION_RAG_CONTAINER=PromptInjectionRag
+PROMPT_INJECTION_RAG_PARTITION_KEY=/injectionId
+PROMPT_INJECTION_RAG_CHUNK_SIZE=800
+PROMPT_INJECTION_RAG_CHUNK_OVERLAP=120
+PROMPT_INJECTION_RAG_EMBED_BATCH_SIZE=16
+```
+
+Rebuilds are traced through the same service as the hello agent (see
+[LangSmith tracing](#langsmith-tracing)) and need no extra configuration: the
+whole rebuild is one trace named `whatsapp-agent:update-prompt-injection-rag`,
+tagged `whatsapp-agent` / `prompt-injection-rag`, with a span per graph node
+and the Event Grid id in the run metadata. With no `LANGSMITH_API_KEY` the
+graph runs untraced. `LANGSMITH_FLUSH_AFTER_RUN=true` uploads the trace before
+the webhook responds instead of leaving it to the background batch.
+
+The rebuild reports its outcome in the webhook response and never throws, so a
+Cosmos or Azure OpenAI outage returns a `failed` result instead of failing the
+Event Grid delivery:
+
+```json
+{
+  "status": "success",
+  "corpusVersion": "2026.08.1",
+  "injectionCount": 22,
+  "chunkCount": 71,
+  "deletedCount": 71,
+  "upsertedCount": 71,
+  "container": "PromptInjectionRag",
+  "traced": true,
+  "durationMs": 4213,
+  "errors": []
+}
+```
+
+The same rebuild can be triggered directly for bootstrapping a new environment
+or replaying a failed event. It deletes and rewrites the RAG, so it is
+key-protected like the other administrative routes:
+
+```bash
+curl -X POST https://your-app-name.azurewebsites.net/api/whatsapp-agent/prompt-injection-rag/rebuild \
+  -H "x-api-key: $API_KEY"
+```
+
+To extend the corpus, add records to the resource file and bump its `version`,
+then fire the event (or the endpoint) to rebuild.
 
 ## LangGraph agent crew
 
