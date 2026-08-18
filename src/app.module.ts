@@ -96,6 +96,29 @@ import { WhatsappAgentModule } from './modules/whatsapp-agent/whatsapp-agent.mod
         WHATSAPP_AGENT_LLM_BASE_URL: Joi.string().uri().optional(),
         WHATSAPP_AGENT_LLM_API_KEY: Joi.string().optional(),
         WHATSAPP_AGENT_LLM_MODEL: Joi.string().optional(),
+        // Known-prompt-injection RAG rebuilt on UPDATE_PROMPT_INJECTION_RAG
+        // events. The container is dedicated to that corpus.
+        PROMPT_INJECTION_RAG_CONTAINER: Joi.string()
+          .min(1)
+          .default('PromptInjectionRag'),
+        PROMPT_INJECTION_RAG_PARTITION_KEY: Joi.string()
+          .pattern(/^\//)
+          .default('/injectionId'),
+        PROMPT_INJECTION_RAG_CHUNK_SIZE: Joi.number()
+          .integer()
+          .min(100)
+          .max(8000)
+          .default(800),
+        PROMPT_INJECTION_RAG_CHUNK_OVERLAP: Joi.number()
+          .integer()
+          .min(0)
+          .max(2000)
+          .default(120),
+        PROMPT_INJECTION_RAG_EMBED_BATCH_SIZE: Joi.number()
+          .integer()
+          .min(1)
+          .max(96)
+          .default(16),
         // LangSmith tracing for the deep agent. Without LANGSMITH_API_KEY no
         // trace is ever sent; the rest only shape where traces land.
         LANGSMITH_API_KEY: Joi.string().optional(),

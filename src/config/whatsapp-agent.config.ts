@@ -7,6 +7,12 @@ function isDisabled(value: string | undefined): boolean {
   return ['false', '0', 'no', 'off'].includes(normalized);
 }
 
+/** Parse an integer env var, falling back when unset or malformed. */
+function int(value: string | undefined, fallback: number): number {
+  const parsed = Number.parseInt(value ?? '', 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 /** The mirror of isDisabled, for flags that stay off until asked for. */
 function isEnabled(value: string | undefined): boolean {
   const normalized = (value || '').trim().toLowerCase();
@@ -25,6 +31,22 @@ export default registerAs('whatsappAgent', () => ({
     apiKey: process.env.WHATSAPP_AGENT_LLM_API_KEY || undefined,
     /** Frontier models are never required. */
     model: process.env.WHATSAPP_AGENT_LLM_MODEL || 'phi-4-mini-instruct',
+  },
+  /**
+   * Known-prompt-injection RAG rebuilt from `resources/prompt-injections.json`
+   * whenever an UPDATE_PROMPT_INJECTION_RAG event arrives. The container is
+   * dedicated to this corpus — the rebuild purges it before writing.
+   */
+  promptInjectionRag: {
+    container:
+      process.env.PROMPT_INJECTION_RAG_CONTAINER || 'PromptInjectionRag',
+    partitionKeyPath:
+      process.env.PROMPT_INJECTION_RAG_PARTITION_KEY || '/injectionId',
+    /** Target characters per chunk before overlap. */
+    chunkSize: int(process.env.PROMPT_INJECTION_RAG_CHUNK_SIZE, 800),
+    chunkOverlap: int(process.env.PROMPT_INJECTION_RAG_CHUNK_OVERLAP, 120),
+    /** Chunks embedded per Azure OpenAI request. */
+    embedBatchSize: int(process.env.PROMPT_INJECTION_RAG_EMBED_BATCH_SIZE, 16),
   },
   langsmith: {
     /**
