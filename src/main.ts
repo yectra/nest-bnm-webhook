@@ -26,6 +26,10 @@ async function bootstrap() {
     origin: '*',
   });
 
+  // Lets services flush in-flight work (for example pending LangSmith trace
+  // batches) when the platform sends SIGTERM on restart or deploy.
+  app.enableShutdownHooks();
+
   // Swagger is a public endpoint too; don't expose it in the main environment
   // (the default when APP_ENV is not set).
   if ((process.env.APP_ENV || 'main').toLowerCase() !== 'main') {

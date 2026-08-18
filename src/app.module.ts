@@ -96,6 +96,12 @@ import { WhatsappAgentModule } from './modules/whatsapp-agent/whatsapp-agent.mod
         WHATSAPP_AGENT_LLM_BASE_URL: Joi.string().uri().optional(),
         WHATSAPP_AGENT_LLM_API_KEY: Joi.string().optional(),
         WHATSAPP_AGENT_LLM_MODEL: Joi.string().optional(),
+        // LangSmith tracing for the deep agent. Without LANGSMITH_API_KEY no
+        // trace is ever sent; the rest only shape where traces land.
+        LANGSMITH_API_KEY: Joi.string().optional(),
+        LANGSMITH_ENDPOINT: Joi.string().uri().optional(),
+        LANGSMITH_PROJECT: Joi.string().min(1).optional(),
+        LANGSMITH_TRACING: Joi.boolean().optional(),
         // Embedding preview/backfill routes are administrative and must never be
         // exposed without a key in production.
         API_KEY: Joi.when('NODE_ENV', {

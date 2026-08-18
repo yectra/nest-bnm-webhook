@@ -1,5 +1,12 @@
 import { registerAs } from '@nestjs/config';
 
+/** Env flags are strings once dotenv loads them; treat only explicit
+ * negatives as "off" so a missing value keeps the documented default. */
+function isDisabled(value: string | undefined): boolean {
+  const normalized = (value || '').trim().toLowerCase();
+  return ['false', '0', 'no', 'off'].includes(normalized);
+}
+
 /**
  * WhatsApp deep-agent configuration. Every setting has a safe default: the
  * agent must work with NO LLM configured (it falls back to static replies),
@@ -12,5 +19,18 @@ export default registerAs('whatsappAgent', () => ({
     apiKey: process.env.WHATSAPP_AGENT_LLM_API_KEY || undefined,
     /** Frontier models are never required. */
     model: process.env.WHATSAPP_AGENT_LLM_MODEL || 'phi-4-mini-instruct',
+  },
+  langsmith: {
+    /**
+     * LangSmith API key. This is the ONLY switch that turns tracing on:
+     * with no key, no trace is ever sent (and no LangSmith client is built).
+     */
+    apiKey: process.env.LANGSMITH_API_KEY || undefined,
+    /** Self-hosted/EU deployments override the default LangSmith host. */
+    endpoint: process.env.LANGSMITH_ENDPOINT || undefined,
+    /** LangSmith project that receives the hello-agent runs. */
+    project: process.env.LANGSMITH_PROJECT || 'bnm-hello-agent',
+    /** Kill switch: LANGSMITH_TRACING=false disables tracing even with a key. */
+    enabled: !isDisabled(process.env.LANGSMITH_TRACING),
   },
 }));

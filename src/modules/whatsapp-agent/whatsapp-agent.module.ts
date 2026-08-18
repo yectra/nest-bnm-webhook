@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { HelloAgentController } from './controllers/hello-agent.controller';
 import { AgentModelService } from './services/agent-model.service';
 import { HelloAgentService } from './services/hello-agent.service';
+import { LangsmithTracingService } from './services/langsmith-tracing.service';
 
 /**
  * WhatsApp deep-agent module (deepagents on @langchain/langgraph).
@@ -12,7 +13,7 @@ import { HelloAgentService } from './services/hello-agent.service';
  */
 @Module({
   controllers: [HelloAgentController],
-  providers: [AgentModelService, HelloAgentService],
-  exports: [AgentModelService],
+  providers: [AgentModelService, HelloAgentService, LangsmithTracingService],
+  exports: [AgentModelService, LangsmithTracingService],
 })
 export class WhatsappAgentModule {}

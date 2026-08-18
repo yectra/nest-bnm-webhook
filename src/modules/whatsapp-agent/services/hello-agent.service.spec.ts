@@ -1,13 +1,23 @@
 import { FakeListChatModel } from '@langchain/core/utils/testing';
 import { HelloAgentService, NO_LLM_REPLY } from './hello-agent.service';
 import { AgentModelService } from './agent-model.service';
+import {
+  LangsmithTracingService,
+  TraceOptions,
+} from './langsmith-tracing.service';
 
-function serviceWithModel(model: FakeListChatModel | undefined) {
+function serviceWithModel(
+  model: FakeListChatModel | undefined,
+  tracing: Partial<LangsmithTracingService> = { traceConfig: () => ({}) },
+) {
   const modelService = {
     isConfigured: () => Boolean(model),
     createModel: () => model,
   } as unknown as AgentModelService;
-  return new HelloAgentService(modelService);
+  return new HelloAgentService(
+    modelService,
+    tracing as unknown as LangsmithTracingService,
+  );
 }
 
 describe('HelloAgentService', () => {
@@ -41,5 +51,30 @@ describe('HelloAgentService', () => {
       new BrokenModel({ responses: ['unused'] }),
     );
     await expect(service.run('Hello agent')).resolves.toBe(NO_LLM_REPLY);
+  });
+
+  it('asks for a trace config and passes it to the agent', async () => {
+    let captured: TraceOptions | undefined;
+    const service = serviceWithModel(
+      new FakeListChatModel({ responses: ['Traced hello'] }),
+      {
+        traceConfig: (options: TraceOptions) => {
+          captured = options;
+          return {};
+        },
+      },
+    );
+    await expect(service.run('Hello agent')).resolves.toBe('Traced hello');
+    expect(captured?.runName).toBe('hello-agent');
+    expect(captured?.tags).toContain('hello-agent');
+    expect(captured?.metadata).toMatchObject({ agent: 'hello-agent' });
+  });
+
+  it('still answers when the tracer cannot be built', async () => {
+    const service = serviceWithModel(
+      new FakeListChatModel({ responses: ['Untraced hello'] }),
+      { traceConfig: () => ({}) },
+    );
+    await expect(service.run('Hello agent')).resolves.toBe('Untraced hello');
   });
 });
