@@ -1,5 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+
+import { WhatsappAgentEventService } from '../../whatsapp-agent/services/whatsapp-agent-event.service';
 
 export interface EventGridEvent<T = any> {
   id?: string;
@@ -21,7 +23,11 @@ export interface SubscriptionValidationData {
 export class EventGridService {
   private readonly logger = new Logger(EventGridService.name);
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    @Optional()
+    private readonly whatsappAgentEventService?: WhatsappAgentEventService,
+  ) {}
 
   processEvent(payload: EventGridEvent | EventGridEvent[]) {
     const events = Array.isArray(payload) ? payload : [payload];
@@ -40,6 +46,28 @@ export class EventGridService {
         );
 
         results.push({ validationResponse: validationCode });
+        continue;
+      }
+
+      // Post Your Requirements events branch out to the WhatsApp deep agent.
+      // The agent runs in the background: Event Grid retries any delivery it
+      // does not get acknowledged quickly, and the agent's answer is written
+      // to the Azure application log rather than to this response.
+      const qualification = this.whatsappAgentEventService?.qualify(event);
+      if (qualification?.qualified) {
+        this.logCapturedEvent(event);
+        this.logger.log(
+          `[Azure Event Grid] Post Your Requirements event ${event?.id}: ${qualification.reason}; routing to the WhatsApp deep agent`,
+        );
+        this.whatsappAgentEventService!.handleQualifiedInBackground(
+          qualification,
+        );
+        results.push({
+          status: 'success',
+          eventId: event?.id,
+          eventType: event?.eventType,
+          routedTo: 'post-your-requirements-agent',
+        });
         continue;
       }
 

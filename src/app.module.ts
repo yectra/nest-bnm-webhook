@@ -96,6 +96,24 @@ import { WhatsappAgentModule } from './modules/whatsapp-agent/whatsapp-agent.mod
         WHATSAPP_AGENT_LLM_BASE_URL: Joi.string().uri().optional(),
         WHATSAPP_AGENT_LLM_API_KEY: Joi.string().optional(),
         WHATSAPP_AGENT_LLM_MODEL: Joi.string().optional(),
+        // "Post Your Requirements" deep agent on Azure AI Foundry. The
+        // endpoint and key default to the shared Azure OpenAI v1 settings, so
+        // usually only the gpt-5-mini deployment name is set here.
+        WHATSAPP_AGENT_FOUNDRY_BASE_URL: Joi.string().uri().optional(),
+        WHATSAPP_AGENT_FOUNDRY_API_KEY: Joi.string().optional(),
+        WHATSAPP_AGENT_FOUNDRY_MODEL: Joi.string().optional(),
+        WHATSAPP_AGENT_REQUIREMENTS_CONTAINER: Joi.string().min(1).optional(),
+        WHATSAPP_AGENT_MAX_CUSTOMERS: Joi.number()
+          .integer()
+          .min(1)
+          .max(1000)
+          .default(200),
+        // LangSmith tracing for the WhatsApp deep agent. Without an API key
+        // the agent runs untraced instead of failing.
+        LANGSMITH_TRACING: Joi.boolean().default(true),
+        LANGSMITH_API_KEY: Joi.string().optional(),
+        LANGSMITH_ENDPOINT: Joi.string().uri().optional(),
+        LANGSMITH_PROJECT: Joi.string().optional(),
         // Embedding preview/backfill routes are administrative and must never be
         // exposed without a key in production.
         API_KEY: Joi.when('NODE_ENV', {

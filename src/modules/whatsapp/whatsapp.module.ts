@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+
+import { WhatsappAgentModule } from '../whatsapp-agent/whatsapp-agent.module';
 import { WebhookController } from './controllers/webhook.controller';
 import { MessageController } from './controllers/message.controller';
 import { TwilioService } from './services/twilio.service';
@@ -8,6 +10,7 @@ import { CallbackService } from './services/callback.service';
 import { EventGridService } from './services/event-grid.service';
 
 @Module({
+  imports: [WhatsappAgentModule],
   controllers: [WebhookController, MessageController],
   providers: [
     TwilioService,

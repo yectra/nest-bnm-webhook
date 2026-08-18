@@ -133,10 +133,82 @@ WHATSAPP_AGENT_LLM_MODEL=phi-4-mini-instruct
 
 All three are optional: with no base URL configured the endpoint returns a
 static reply instead of failing (the module is designed to fail open).
-Frontier models are never required. Later increments add the Event Grid
-consumer that answers inbound WhatsApp messages
-(`BNM_WHATSAPP_RECEIVED_FROM_JAVA_EVENT`), the grounded support agent, the
-adversarial-input guard, and the PII output filter.
+Frontier models are never required. Later increments add the grounded support
+agent, the adversarial-input guard, and the PII output filter.
+
+## WhatsApp "Post Your Requirements" deep agent
+
+Every Event Grid delivery on `POST /api/webhook/event-grid` is first
+**qualified**: an event belongs to the Post Your Requirements flow when the
+marker appears on `eventType`, `subject`, or `topic`, or on one of the `data`
+discriminators (`data.formType`, `data.type`, `data.source`, `data.category`,
+...). The comparison ignores case and separators, so `POST_YOUR_REQUIREMENTS`,
+`post-your-requirements`, `PostYourRequirements`, and
+`Post Your Requirements` all match — including when the envelope keeps the
+generic `BNM_WHATSAPP_RECEIVED_FROM_JAVA_EVENT` type and flags the flow inside
+`data`.
+
+Only a qualified event **branches out** to the deep agent
+(`createDeepAgent` on `@langchain/langgraph`) running the Azure AI Foundry
+**gpt-5-mini** deployment. The agent owns one tool, `list_customer_names`,
+which reads distinct customer names from the Post Your Requirements Cosmos
+container, so `"give me all customer names"` — and any similar phrasing the
+model recognises, such as `"who are the clients?"` or `"list everyone who
+posted a requirement"` — is answered from live data rather than from the
+model's memory. Anything else gets a short acknowledgement.
+
+Each turn is **traced to LangSmith** with the run name
+`post-your-requirements-agent` and the event id, conversation id, and
+deployment name attached as metadata, and the run is flushed before the turn
+returns. The verdict and the **result are written to the Azure application
+log** as single-line JSON records (`[AZURE-LOG][whatsapp-agent.qualification]`
+and `[AZURE-LOG][whatsapp-agent.requirements-result]`), which is what Azure
+App Service ships to the log stream and to Log Analytics
+(`AppServiceConsoleLogs`) / Application Insights. The result record carries
+the answer, the customer names read, the deployment, the duration, and the
+`langsmithRunId` that correlates the log line with the trace:
+
+```kusto
+AppServiceConsoleLogs
+| where ResultDescription contains "[AZURE-LOG][whatsapp-agent.requirements-result]"
+```
+
+The Event Grid webhook acknowledges the delivery immediately and runs the
+agent in the background (an unacknowledged delivery is retried by Event Grid).
+To run the same branch synchronously — for a replay or a smoke test — post the
+envelope to the agent directly and get the answer, the names, and the trace id
+back in the response:
+
+```bash
+curl -X POST https://your-app/api/whatsapp-agent/requirements-event \
+  -H 'Content-Type: application/json' \
+  -d '{"id":"evt-1","eventType":"BNM_WHATSAPP_RECEIVED_FROM_JAVA_EVENT",
+       "data":{"formType":"POST_YOUR_REQUIREMENTS",
+               "message":"give me all customer names"}}'
+```
+
+Configuration:
+
+```env
+# Azure AI Foundry gpt-5-mini. Base URL and key default to OPENAI_BASE_URL /
+# OPENAI_API_KEY, so usually only the deployment name is set.
+WHATSAPP_AGENT_FOUNDRY_MODEL=gpt-5-mini
+WHATSAPP_AGENT_FOUNDRY_BASE_URL=https://YOUR_RESOURCE.openai.azure.com/openai/v1/
+WHATSAPP_AGENT_FOUNDRY_API_KEY=your-foundry-key
+WHATSAPP_AGENT_REQUIREMENTS_CONTAINER=PostYourRequirements
+WHATSAPP_AGENT_MAX_CUSTOMERS=200
+
+LANGSMITH_TRACING=true
+LANGSMITH_API_KEY=your-langsmith-key
+LANGSMITH_PROJECT=bnm-whatsapp-agent
+```
+
+The branch fails open at every step, so a WhatsApp delivery is never lost to a
+dependency outage: with no Foundry deployment configured the agent answers
+customer-name requests straight from Cosmos, a failed model turn falls back to
+that same path, an unreachable Cosmos container produces an honest "directory
+unavailable" reply, and a missing `LANGSMITH_API_KEY` only means the turn runs
+untraced (the run id is still logged).
 
 ## LangGraph agent crew
 
