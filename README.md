@@ -150,6 +150,8 @@ LANGSMITH_PROJECT=bnm-hello-agent
 LANGSMITH_ENDPOINT=https://api.smith.langchain.com
 # Kill switch: keeps the key but stops tracing.
 LANGSMITH_TRACING=true
+# Upload each run's trace before the reply returns (default: false).
+LANGSMITH_FLUSH_AFTER_RUN=false
 ```
 
 `LANGSMITH_API_KEY` is the only switch that turns tracing on. **Without the
@@ -166,6 +168,13 @@ exactly as it did before. Notes:
   request, and traces are batched off the request path.
 - Traces are flushed on shutdown (`app.enableShutdownHooks()`), so pending
   batches still reach LangSmith when the platform sends `SIGTERM`.
+- `LANGSMITH_FLUSH_AFTER_RUN=true` uploads each run's trace (the agent graph
+  and every model and tool call inside it) before the reply returns, instead
+  of leaving it to the background batch. That puts one LangSmith round trip
+  on the request path, so it is off by default; turn it on where the process
+  may not outlive the batch queue — scale-to-zero or short-lived hosts, or
+  when debugging and you want the trace visible immediately. Failed turns are
+  flushed too, and a failed upload is logged without affecting the reply.
 - The prompt and the reply are part of a trace, so treat the LangSmith
   project as holding the same data as the conversation itself.
 

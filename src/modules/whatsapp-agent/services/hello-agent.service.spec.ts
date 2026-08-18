@@ -8,15 +8,20 @@ import {
 
 function serviceWithModel(
   model: FakeListChatModel | undefined,
-  tracing: Partial<LangsmithTracingService> = { traceConfig: () => ({}) },
+  tracing: Partial<LangsmithTracingService> = {},
 ) {
+  const stub: Partial<LangsmithTracingService> = {
+    traceConfig: () => ({}),
+    flushAfterRun: () => Promise.resolve(),
+    ...tracing,
+  };
   const modelService = {
     isConfigured: () => Boolean(model),
     createModel: () => model,
   } as unknown as AgentModelService;
   return new HelloAgentService(
     modelService,
-    tracing as unknown as LangsmithTracingService,
+    stub as unknown as LangsmithTracingService,
   );
 }
 
@@ -76,5 +81,46 @@ describe('HelloAgentService', () => {
       { traceConfig: () => ({}) },
     );
     await expect(service.run('Hello agent')).resolves.toBe('Untraced hello');
+  });
+
+  it('flushes the trace once the turn is done', async () => {
+    let flushed = 0;
+    const service = serviceWithModel(
+      new FakeListChatModel({ responses: ['Flushed hello'] }),
+      {
+        flushAfterRun: () => {
+          flushed += 1;
+          return Promise.resolve();
+        },
+      },
+    );
+    await expect(service.run('Hello agent')).resolves.toBe('Flushed hello');
+    expect(flushed).toBe(1);
+  });
+
+  it('flushes the trace of a failed turn as well', async () => {
+    class BrokenModel extends FakeListChatModel {
+      override bindTools(): any {
+        return this;
+      }
+      override _generate(): Promise<never> {
+        return Promise.reject(new Error('model outage'));
+      }
+      override _streamResponseChunks(): AsyncGenerator<never> {
+        throw new Error('model outage');
+      }
+    }
+    let flushed = 0;
+    const service = serviceWithModel(
+      new BrokenModel({ responses: ['unused'] }),
+      {
+        flushAfterRun: () => {
+          flushed += 1;
+          return Promise.resolve();
+        },
+      },
+    );
+    await expect(service.run('Hello agent')).resolves.toBe(NO_LLM_REPLY);
+    expect(flushed).toBe(1);
   });
 });

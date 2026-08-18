@@ -74,9 +74,34 @@ export class LangsmithTracingService implements OnApplicationShutdown {
     }
   }
 
+  /** True when each traced run is uploaded before the reply returns. */
+  flushesAfterRun(): boolean {
+    return Boolean(
+      this.configService.get<boolean>('whatsappAgent.langsmith.flushAfterRun'),
+    );
+  }
+
+  /**
+   * Drains the queued trace at the end of one agent run, so the run (and
+   * every model and tool call inside it) reaches LangSmith before the reply
+   * returns. No-op unless LANGSMITH_FLUSH_AFTER_RUN is on, and never throws:
+   * a slow or failing upload must not cost the caller its answer.
+   */
+  async flushAfterRun(): Promise<void> {
+    try {
+      if (!this.client || !this.flushesAfterRun()) {
+        return;
+      }
+      await this.flush();
+    } catch (error) {
+      this.logger.warn(`langsmith flush after run failed: ${String(error)}`);
+    }
+  }
+
   /**
    * Waits for traces queued in the background. Traces are batched off the
-   * request path, so this only matters when the process is about to exit.
+   * request path, so this only matters when the process is about to exit or
+   * when LANGSMITH_FLUSH_AFTER_RUN asks for an upload per run.
    */
   async flush(): Promise<void> {
     if (!this.client) {

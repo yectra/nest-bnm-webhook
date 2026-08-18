@@ -63,6 +63,57 @@ describe('LangsmithTracingService', () => {
     expect(firstTracer.client).toBe(secondTracer.client);
   });
 
+  it('uploads the trace after each run when asked to', async () => {
+    const service = serviceWith({
+      ...WITH_KEY,
+      'whatsappAgent.langsmith.flushAfterRun': true,
+    });
+    expect(service.flushesAfterRun()).toBe(true);
+
+    const config = service.traceConfig({ runName: 'hello-agent' });
+    const [tracer] = config.callbacks as LangChainTracer[];
+    const pending = jest
+      .spyOn(tracer.client as Client, 'awaitPendingTraceBatches')
+      .mockResolvedValue(undefined);
+
+    await service.flushAfterRun();
+    expect(pending).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves the trace batched when flush-after-run is off', async () => {
+    const service = serviceWith(WITH_KEY);
+    expect(service.flushesAfterRun()).toBe(false);
+
+    const config = service.traceConfig({ runName: 'hello-agent' });
+    const [tracer] = config.callbacks as LangChainTracer[];
+    const pending = jest
+      .spyOn(tracer.client as Client, 'awaitPendingTraceBatches')
+      .mockResolvedValue(undefined);
+
+    await service.flushAfterRun();
+    expect(pending).not.toHaveBeenCalled();
+  });
+
+  it('skips the per-run flush when nothing was traced', async () => {
+    const service = serviceWith({
+      'whatsappAgent.langsmith.flushAfterRun': true,
+    });
+    await expect(service.flushAfterRun()).resolves.toBeUndefined();
+  });
+
+  it('never rethrows a failed per-run flush', async () => {
+    const service = serviceWith({
+      ...WITH_KEY,
+      'whatsappAgent.langsmith.flushAfterRun': true,
+    });
+    const config = service.traceConfig({ runName: 'hello-agent' });
+    const [tracer] = config.callbacks as LangChainTracer[];
+    jest
+      .spyOn(tracer.client as Client, 'awaitPendingTraceBatches')
+      .mockRejectedValue(new Error('langsmith down'));
+    await expect(service.flushAfterRun()).resolves.toBeUndefined();
+  });
+
   it('flushes nothing when tracing never started', async () => {
     const service = serviceWith({});
     await expect(service.onApplicationShutdown()).resolves.toBeUndefined();

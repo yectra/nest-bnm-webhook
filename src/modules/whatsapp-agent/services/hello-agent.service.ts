@@ -17,7 +17,8 @@ export const NO_LLM_REPLY =
  * model error degrades to the static reply instead of surfacing an error.
  *
  * Each turn is traced to LangSmith when LANGSMITH_API_KEY is set; without a
- * key the invocation runs with an empty config and no trace is sent.
+ * key the invocation runs with an empty config and no trace is sent. With
+ * LANGSMITH_FLUSH_AFTER_RUN the trace is uploaded before the reply returns.
  */
 @Injectable()
 export class HelloAgentService {
@@ -68,6 +69,11 @@ export class HelloAgentService {
     } catch (error) {
       this.logger.warn(`hello agent failed, falling back: ${String(error)}`);
       return NO_LLM_REPLY;
+    } finally {
+      // Only uploads here when LANGSMITH_FLUSH_AFTER_RUN is set; otherwise
+      // the trace stays batched off the request path. Failed turns are
+      // flushed too — a trace of the failure is the useful one.
+      await this.langsmithTracingService.flushAfterRun();
     }
   }
 }

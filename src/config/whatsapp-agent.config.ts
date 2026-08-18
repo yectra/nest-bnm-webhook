@@ -7,6 +7,12 @@ function isDisabled(value: string | undefined): boolean {
   return ['false', '0', 'no', 'off'].includes(normalized);
 }
 
+/** The mirror of isDisabled, for flags that stay off until asked for. */
+function isEnabled(value: string | undefined): boolean {
+  const normalized = (value || '').trim().toLowerCase();
+  return ['true', '1', 'yes', 'on'].includes(normalized);
+}
+
 /**
  * WhatsApp deep-agent configuration. Every setting has a safe default: the
  * agent must work with NO LLM configured (it falls back to static replies),
@@ -32,5 +38,12 @@ export default registerAs('whatsappAgent', () => ({
     project: process.env.LANGSMITH_PROJECT || 'bnm-hello-agent',
     /** Kill switch: LANGSMITH_TRACING=false disables tracing even with a key. */
     enabled: !isDisabled(process.env.LANGSMITH_TRACING),
+    /**
+     * Upload the trace before the reply returns instead of batching it in
+     * the background. Off by default because it puts a LangSmith round trip
+     * on the request path; turn it on where the process may not live long
+     * enough to drain the batch queue (short-lived or scale-to-zero hosts).
+     */
+    flushAfterRun: isEnabled(process.env.LANGSMITH_FLUSH_AFTER_RUN),
   },
 }));

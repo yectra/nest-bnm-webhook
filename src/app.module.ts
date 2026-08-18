@@ -102,6 +102,7 @@ import { WhatsappAgentModule } from './modules/whatsapp-agent/whatsapp-agent.mod
         LANGSMITH_ENDPOINT: Joi.string().uri().optional(),
         LANGSMITH_PROJECT: Joi.string().min(1).optional(),
         LANGSMITH_TRACING: Joi.boolean().optional(),
+        LANGSMITH_FLUSH_AFTER_RUN: Joi.boolean().optional(),
         // Embedding preview/backfill routes are administrative and must never be
         // exposed without a key in production.
         API_KEY: Joi.when('NODE_ENV', {
