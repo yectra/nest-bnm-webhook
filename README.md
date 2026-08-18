@@ -51,8 +51,6 @@ COSMOS_KEY=your_cosmos_key
 COSMOS_DATABASE=your_database_name
 API_KEY=a-long-random-administrative-api-key
 EVENT_LISTENER_ENABLED=false
-INTERNAL_EVENTS_ENABLED=false
-INTERNAL_EVENTS_KEY=a-long-random-internal-event-key
 ```
 
 Notes:
@@ -66,9 +64,8 @@ Notes:
 - `TWILIO_WEBHOOK_SECRET` is optional. Real Twilio requests are validated with the Twilio auth token.
 - `EMBEDDING_MODEL` must be the Azure deployment name. `text-embedding-3-small`
   should use 1536 dimensions; all Cosmos vector containers must use the same value.
-- `EVENT_LISTENER_*` configure the pull-based event listener and
-  `INTERNAL_EVENTS_*` the internal-only HTTP webhook; see
-  [Internal event listener](#internal-event-listener-hello-world) below.
+- `EVENT_LISTENER_*` configure the event listener; see
+  [Event listener](#event-listener-hello-world) below.
 
 ## Embeddings and semantic search
 
@@ -144,18 +141,14 @@ consumer that answers inbound WhatsApp messages
 (`BNM_WHATSAPP_RECEIVED_FROM_JAVA_EVENT`), the grounded support agent, the
 adversarial-input guard, and the PII output filter.
 
-## Internal event listener (hello world)
+## Event listener (hello world)
 
-Two ways to receive events, both off by default and both sharing the same
-`HelloEventService`. Enable whichever matches the producer.
-
-### Option A — pull-based listener, no controller (recommended)
-
-`HelloEventListener` is a plain provider: no controller, no route, no inbound
-port. It pulls events from an Azure Service Bus queue (or topic subscription)
-over an **outbound** connection, so there is no public surface to protect at
-all and the app can run with `publicNetworkAccess=Disabled`. Point an Event
-Grid subscription at the queue and the events arrive here.
+`HelloEventListener` is a plain provider with **no controller**: no route, no
+inbound port, nothing exposed to the public internet. It pulls events from an
+Azure Service Bus queue (or topic subscription) over an **outbound** connection,
+so the app can run with `publicNetworkAccess=Disabled`. Point an Event Grid
+subscription at the queue and the events arrive here; each one is logged with a
+"Hello, world" greeting by `HelloEventService`.
 
 ```env
 EVENT_LISTENER_ENABLED=true
@@ -169,47 +162,19 @@ EVENT_LISTENER_QUEUE=hello-events
 EVENT_LISTENER_MAX_CONCURRENT=1
 ```
 
-With no connection string it authenticates with `DefaultAzureCredential`, so
-the App Service managed identity needs the **Azure Service Bus Data Receiver**
-role on the queue. Messages are received in `peekLock` mode and settled
-explicitly: completed on success, abandoned on a handler error (Service Bus
-redelivers, then dead-letters), dead-lettered when the body is not JSON.
-Enable **Always On** so the worker is not unloaded while idle.
+With no connection string it authenticates with `DefaultAzureCredential`, so the
+App Service managed identity needs the **Azure Service Bus Data Receiver** role
+on the queue. Messages are received in `peekLock` mode and settled explicitly:
+completed on success, abandoned on a handler error (Service Bus redelivers, then
+dead-letters), dead-lettered when the body is not JSON. Both the Event Grid
+schema and CloudEvents v1.0 are understood.
 
-### Option B — HTTP webhook, internal-only
+Enable **Always On** so the worker is not unloaded while idle. Disabled by
+default; enabled but misconfigured, it logs an error and stays idle instead of
+taking the app down.
 
-`POST /api/internal/events/hello` is a webhook for producers that can only
-push over HTTP. It is **not open to the public**: it answers only callers that
-reach the app from inside Azure. It accepts the Event Grid schema and
-CloudEvents v1.0, answers both subscription handshakes, and logs a greeting for
-every event received.
-
-```env
-INTERNAL_EVENTS_ENABLED=true
-INTERNAL_EVENTS_KEY=a-long-random-internal-event-key
-# Optional: extra CIDRs on top of the built-in private/Azure-internal ranges.
-INTERNAL_EVENTS_ALLOWED_CIDRS=10.20.0.0/16
-INTERNAL_EVENTS_ALLOWED_ORIGIN=eventgrid.azure.net
-```
-
-Access is restricted in three independent ways:
-
-1. **Azure network controls** — a private endpoint (or access restrictions with
-   the `AzureEventGrid` service tag plus a deny-all rule) keeps public traffic
-   from reaching the app at all. Configure this in Azure; see the doc below.
-2. **`AzureInternalGuard`** — the socket peer and every `X-Forwarded-For` hop
-   must be a private/Azure-internal address (public callers get `403`), and the
-   caller must present `INTERNAL_EVENTS_KEY` in `x-internal-event-key` (`401`
-   otherwise). It fails closed with `503` while disabled or unconfigured.
-3. **Not published** — the routes are excluded from Swagger, and CORS is
-   disabled for everything under `/api/internal`.
-
-Note that the global `MainEnvBlockGuard` still applies to Option B: as with
-every other route, run it on a slot where `APP_ENV` is `dev` or `stage`. It does
-not affect Option A, which has no routes.
-
-Full Azure setup, Event Grid subscription commands, and verification steps are
-in [docs/internal-hello-event-listener.md](docs/internal-hello-event-listener.md).
+Full Azure setup and verification steps are in
+[docs/hello-event-listener.md](docs/hello-event-listener.md).
 
 ## LangGraph agent crew
 

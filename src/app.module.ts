@@ -10,7 +10,6 @@ import twilioConfig from './config/twilio.config';
 import azureConfig from './config/azure.config';
 import databaseConfig from './config/database.config';
 import whatsappAgentConfig from './config/whatsapp-agent.config';
-import internalEventsConfig from './config/internal-events.config';
 import eventListenerConfig from './config/event-listener.config';
 
 import { HealthModule } from './modules/health/health.module';
@@ -36,7 +35,6 @@ import { InternalEventsModule } from './modules/internal-events/internal-events.
         azureConfig,
         databaseConfig,
         whatsappAgentConfig,
-        internalEventsConfig,
         eventListenerConfig,
       ],
       validationSchema: Joi.object({
@@ -101,21 +99,6 @@ import { InternalEventsModule } from './modules/internal-events/internal-events.
         WHATSAPP_AGENT_LLM_BASE_URL: Joi.string().uri().optional(),
         WHATSAPP_AGENT_LLM_API_KEY: Joi.string().optional(),
         WHATSAPP_AGENT_LLM_MODEL: Joi.string().optional(),
-        // Internal-only event listener (/api/internal/events/*). Disabled by
-        // default; when enabled it is reachable from Azure-internal callers
-        // only and requires INTERNAL_EVENTS_KEY.
-        INTERNAL_EVENTS_ENABLED: Joi.boolean().default(false),
-        INTERNAL_EVENTS_KEY: Joi.when('INTERNAL_EVENTS_ENABLED', {
-          is: true,
-          then: Joi.string().min(32).required(),
-          otherwise: Joi.string().min(32).optional(),
-        }),
-        // Comma-separated CIDRs allowed on top of the built-in private ranges,
-        // for example the subnet behind a private endpoint.
-        INTERNAL_EVENTS_ALLOWED_CIDRS: Joi.string().allow('').optional(),
-        INTERNAL_EVENTS_ALLOWED_ORIGIN: Joi.string()
-          .min(1)
-          .default('eventgrid.azure.net'),
         // Pull-based event listener (Azure Service Bus). No controller and no
         // inbound port: it only opens outbound connections.
         EVENT_LISTENER_ENABLED: Joi.boolean().default(false),

@@ -1,8 +1,4 @@
 import { HelloEventService } from './hello-event.service';
-import type {
-  InternalEventAck,
-  SubscriptionValidationResponse,
-} from '../interfaces/internal-event.interface';
 
 describe('HelloEventService', () => {
   let service: HelloEventService;
@@ -10,29 +6,16 @@ describe('HelloEventService', () => {
   beforeEach(() => {
     service = new HelloEventService();
     jest.spyOn(console, 'log').mockImplementation(() => undefined);
-    jest.spyOn(console, 'warn').mockImplementation(() => undefined);
   });
 
   afterEach(() => {
     jest.restoreAllMocks();
   });
 
-  it('answers the Event Grid subscription validation handshake', () => {
-    const result = service.handle([
-      {
-        id: '1',
-        eventType: 'Microsoft.EventGrid.SubscriptionValidationEvent',
-        data: { validationCode: 'code-123' },
-      },
-    ]) as SubscriptionValidationResponse;
-
-    expect(result).toEqual({ validationResponse: 'code-123' });
-  });
-
   it('greets Event Grid schema events', () => {
     const result = service.handle([
       { id: 'evt-1', eventType: 'Bnm.Hello', subject: '/hello' },
-    ]) as InternalEventAck;
+    ]);
 
     expect(result.message).toBe('Hello, world');
     expect(result.receivedCount).toBe(1);
@@ -50,7 +33,7 @@ describe('HelloEventService', () => {
       type: 'Bnm.Hello.CloudEvent',
       source: '/internal/tests',
       specversion: '1.0',
-    }) as InternalEventAck;
+    });
 
     expect(result.receivedCount).toBe(1);
     expect(result.results[0].eventType).toBe('Bnm.Hello.CloudEvent');
@@ -63,29 +46,17 @@ describe('HelloEventService', () => {
     const result = service.handle([
       { id: 'a', eventType: 'Bnm.Hello' },
       { id: 'b', eventType: 'Bnm.Hello' },
-    ]) as InternalEventAck;
+    ]);
 
     expect(result.receivedCount).toBe(2);
     expect(result.results.map((entry) => entry.eventId)).toEqual(['a', 'b']);
   });
 
   it('still greets an event without a type', () => {
-    const result = service.handle([{ id: 'c' }]) as InternalEventAck;
+    const result = service.handle([{ id: 'c' }]);
 
     expect(result.results[0].greeting).toBe(
       'Hello, world from an unlabelled event',
     );
-  });
-
-  it('does not treat a validation event without a code as a handshake', () => {
-    const result = service.handle([
-      {
-        id: 'd',
-        eventType: 'Microsoft.EventGrid.SubscriptionValidationEvent',
-        data: {},
-      },
-    ]) as InternalEventAck;
-
-    expect(result.message).toBe('Hello, world');
   });
 });

@@ -24,15 +24,6 @@ export interface CloudEvent<T = unknown> {
 
 export type InternalEvent = EventGridSchemaEvent | CloudEvent;
 
-export interface SubscriptionValidationData {
-  validationCode?: string;
-  validationUrl?: string;
-}
-
-export interface SubscriptionValidationResponse {
-  validationResponse: string;
-}
-
 export interface InternalEventResult {
   /** "Hello, world" greeting produced for the event. */
   greeting: string;

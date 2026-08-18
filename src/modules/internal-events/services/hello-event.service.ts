@@ -6,36 +6,19 @@ import type {
   InternalEvent,
   InternalEventAck,
   InternalEventResult,
-  SubscriptionValidationData,
-  SubscriptionValidationResponse,
 } from '../interfaces/internal-event.interface';
-
-const SUBSCRIPTION_VALIDATION_EVENT =
-  'Microsoft.EventGrid.SubscriptionValidationEvent';
 
 /**
  * "Hello world" handler for events delivered by Azure internals. It accepts
- * both the Event Grid schema (array of events) and CloudEvents v1.0 (a single
- * event), answers the subscription validation handshake, and logs a greeting
- * for everything else.
+ * both the Event Grid schema (an array of events) and CloudEvents v1.0 (a
+ * single event), and logs a greeting for each one.
  */
 @Injectable()
 export class HelloEventService {
   private readonly logger = new Logger(HelloEventService.name);
 
-  handle(
-    payload: InternalEvent | InternalEvent[],
-  ): SubscriptionValidationResponse | InternalEventAck {
+  handle(payload: InternalEvent | InternalEvent[]): InternalEventAck {
     const events = Array.isArray(payload) ? payload : [payload];
-
-    // The handshake arrives on its own, so answer it before anything else.
-    for (const event of events) {
-      const validationResponse = this.tryValidationHandshake(event);
-      if (validationResponse) {
-        return validationResponse;
-      }
-    }
-
     const results = events.map((event) => this.greet(event));
 
     return {
@@ -43,31 +26,6 @@ export class HelloEventService {
       receivedCount: events.length,
       results,
     };
-  }
-
-  private tryValidationHandshake(
-    event: InternalEvent,
-  ): SubscriptionValidationResponse | null {
-    if (this.eventType(event) !== SUBSCRIPTION_VALIDATION_EVENT) {
-      return null;
-    }
-
-    const data = (event as EventGridSchemaEvent<SubscriptionValidationData>)
-      .data;
-    const validationCode = data?.validationCode;
-
-    if (!validationCode) {
-      this.logger.warn(
-        'Subscription validation event received without a validation code',
-      );
-      return null;
-    }
-
-    this.logger.log(
-      'Answered the Event Grid subscription validation handshake',
-    );
-
-    return { validationResponse: validationCode };
   }
 
   private greet(event: InternalEvent): InternalEventResult {

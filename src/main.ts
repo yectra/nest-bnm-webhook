@@ -1,9 +1,8 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import type { Express, Request } from 'express';
+import type { Express } from 'express';
 import { urlencoded } from 'express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import type { CorsOptionsDelegate } from '@nestjs/common/interfaces/external/cors-options.interface';
 
 import { AppModule } from './app.module';
 
@@ -23,15 +22,9 @@ async function bootstrap() {
     }),
   );
 
-  // CORS stays open for the public API, but never for the internal-only
-  // routes: browsers must not be able to read them cross-origin.
-  const corsDelegate: CorsOptionsDelegate<Request> = (request, callback) => {
-    const isInternalRoute = (request.url ?? '').startsWith('/api/internal');
-
-    callback(null, isInternalRoute ? { origin: false } : { origin: '*' });
-  };
-
-  app.enableCors(corsDelegate);
+  app.enableCors({
+    origin: '*',
+  });
 
   // Swagger is a public endpoint too; don't expose it in the main environment
   // (the default when APP_ENV is not set).
