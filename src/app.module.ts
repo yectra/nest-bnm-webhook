@@ -11,6 +11,7 @@ import azureConfig from './config/azure.config';
 import databaseConfig from './config/database.config';
 import whatsappAgentConfig from './config/whatsapp-agent.config';
 import internalEventsConfig from './config/internal-events.config';
+import eventListenerConfig from './config/event-listener.config';
 
 import { HealthModule } from './modules/health/health.module';
 import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
@@ -36,6 +37,7 @@ import { InternalEventsModule } from './modules/internal-events/internal-events.
         databaseConfig,
         whatsappAgentConfig,
         internalEventsConfig,
+        eventListenerConfig,
       ],
       validationSchema: Joi.object({
         NODE_ENV: Joi.string()
@@ -114,6 +116,21 @@ import { InternalEventsModule } from './modules/internal-events/internal-events.
         INTERNAL_EVENTS_ALLOWED_ORIGIN: Joi.string()
           .min(1)
           .default('eventgrid.azure.net'),
+        // Pull-based event listener (Azure Service Bus). No controller and no
+        // inbound port: it only opens outbound connections.
+        EVENT_LISTENER_ENABLED: Joi.boolean().default(false),
+        EVENT_LISTENER_CONNECTION_STRING: Joi.string().optional(),
+        // Fully qualified namespace, e.g. <name>.servicebus.windows.net.
+        // Used with managed identity when no connection string is set.
+        EVENT_LISTENER_NAMESPACE: Joi.string().optional(),
+        EVENT_LISTENER_QUEUE: Joi.string().optional(),
+        EVENT_LISTENER_TOPIC: Joi.string().optional(),
+        EVENT_LISTENER_SUBSCRIPTION: Joi.string().optional(),
+        EVENT_LISTENER_MAX_CONCURRENT: Joi.number()
+          .integer()
+          .min(1)
+          .max(100)
+          .default(1),
         // Embedding preview/backfill routes are administrative and must never be
         // exposed without a key in production.
         API_KEY: Joi.when('NODE_ENV', {
