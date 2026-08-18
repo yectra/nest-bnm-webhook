@@ -96,6 +96,9 @@ import { WhatsappAgentModule } from './modules/whatsapp-agent/whatsapp-agent.mod
         WHATSAPP_AGENT_LLM_BASE_URL: Joi.string().uri().optional(),
         WHATSAPP_AGENT_LLM_API_KEY: Joi.string().optional(),
         WHATSAPP_AGENT_LLM_MODEL: Joi.string().optional(),
+        // Adversarial-input guard: the heuristic pass always runs; this only
+        // toggles the extra deep-agent review pass.
+        WHATSAPP_AGENT_INJECTION_LLM_REVIEW: Joi.boolean().default(true),
         // Embedding preview/backfill routes are administrative and must never be
         // exposed without a key in production.
         API_KEY: Joi.when('NODE_ENV', {

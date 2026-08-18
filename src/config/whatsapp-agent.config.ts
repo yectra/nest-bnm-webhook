@@ -13,4 +13,11 @@ export default registerAs('whatsappAgent', () => ({
     /** Frontier models are never required. */
     model: process.env.WHATSAPP_AGENT_LLM_MODEL || 'phi-4-mini-instruct',
   },
+  promptInjection: {
+    /**
+     * Optional deep-agent review pass on top of the always-on heuristic scan.
+     * Set WHATSAPP_AGENT_INJECTION_LLM_REVIEW=false to run heuristics only.
+     */
+    llmReview: process.env.WHATSAPP_AGENT_INJECTION_LLM_REVIEW !== 'false',
+  },
 }));

@@ -6,8 +6,10 @@ import { MessageService } from './services/message.service';
 import { WebhookService } from './services/webhook.service';
 import { CallbackService } from './services/callback.service';
 import { EventGridService } from './services/event-grid.service';
+import { WhatsappAgentModule } from '../whatsapp-agent/whatsapp-agent.module';
 
 @Module({
+  imports: [WhatsappAgentModule],
   controllers: [WebhookController, MessageController],
   providers: [
     TwilioService,

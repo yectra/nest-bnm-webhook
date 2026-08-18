@@ -135,8 +135,52 @@ All three are optional: with no base URL configured the endpoint returns a
 static reply instead of failing (the module is designed to fail open).
 Frontier models are never required. Later increments add the Event Grid
 consumer that answers inbound WhatsApp messages
-(`BNM_WHATSAPP_RECEIVED_FROM_JAVA_EVENT`), the grounded support agent, the
-adversarial-input guard, and the PII output filter.
+(`BNM_WHATSAPP_RECEIVED_FROM_JAVA_EVENT`), the grounded support agent, and the
+PII output filter.
+
+## Prompt-injection guard on the Java event
+
+`POST /api/webhook/event-grid` receives `BNM_WHATSAPP_RECEIVED_FROM_JAVA_EVENT`,
+which carries a "Post Your Requirements" submission: the customer's phone
+number plus the free text they typed. That text is later read by the agents, so
+`PromptInjectionDetectorService` scans it and **reports** every finding in the
+logs. The guard is report-only: it never rewrites the text and never rejects
+the event.
+
+Two passes, both fail-open:
+
+1. **Heuristic pass (always on, no network).** Rules in
+   `prompt-injection.rules.ts` cover instruction override, system-prompt
+   extraction, role/persona manipulation, chat-template token spoofing
+   (`<|im_start|>`, `[INST]`, `system:` turns), guardrail bypass, forced
+   responses and business-logic abuse ("approve this quote automatically"),
+   tool/command/SQL abuse, data exfiltration, and obfuscation. Text is scanned
+   as received, whitespace/homoglyph-normalized, and with base64 blobs decoded
+   once, so zero-width padding and encoded payloads still match. The verdict is
+   the highest matched severity, escalated one level when three or more rules
+   fire or the weighted score reaches 8.
+2. **Deep-agent review pass (optional).** A `createDeepAgent` classifier on the
+   low-cost endpoint double-checks the longest field and logs a follow-up
+   verdict. It runs in the background so Event Grid delivery is never blocked
+   by an LLM call, is skipped when no model is configured, and is disabled with
+   `WHATSAPP_AGENT_INJECTION_LLM_REVIEW=false`.
+
+The payload shape is parsed key-driven rather than schema-driven
+(`requirement-event.parser.ts`), so flat, nested, and unknown Java payload
+shapes are all scanned; the phone number is masked (`91********45`) before it
+reaches the log sink.
+
+A clean submission logs one line:
+
+```
+[prompt-injection] CLEAN eventId=evt-9002 phone=98******23 fields=1
+```
+
+A hostile one logs a `PROMPT INJECTION DETECTED` block at `error` level (`warn`
+for low/medium risk) naming the event, the masked phone, the risk, and every
+matched rule with its category, severity, and a trimmed excerpt. The same
+summary (`detected`, `risk`, `scannedFields`, `signals`) is echoed in the
+Event Grid response so the Java side can see the verdict too.
 
 ## LangGraph agent crew
 
