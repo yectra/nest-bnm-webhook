@@ -208,7 +208,8 @@ START -> loadCorpus -> chunkCorpus -> embedChunks -> deleteExistingRag -> persis
   network access.
 - **chunkCorpus** renders each record (technique, phrasings, example,
   detection guidance, recommended action) and splits it into overlapping
-  chunks on the coarsest structural boundary that fits.
+  chunks with LangChain's `RecursiveCharacterTextSplitter`, which keeps the
+  largest structural unit that fits (paragraph before line before word).
 - **embedChunks** embeds the chunks in batches through the same Azure OpenAI
   deployment as the rest of the app.
 - **deleteExistingRag** deletes the existing RAG, if any, from Cosmos DB. It

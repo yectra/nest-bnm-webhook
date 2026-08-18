@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { END, START, StateGraph } from '@langchain/langgraph';
 import type { RunnableConfig } from '@langchain/core/runnables';
+import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
 
 import { EmbeddingService } from '../../embedding/embedding.service';
 import { PromptInjectionRagRepository } from '../repositories/prompt-injection-rag.repository';
@@ -10,7 +11,6 @@ import type {
   EmbeddedPromptInjectionChunk,
   PromptInjectionChunk,
 } from '../interfaces/prompt-injection.interface';
-import { splitText } from './chunking.util';
 import {
   PromptInjectionRagStateAnnotation,
   type PromptInjectionRagState,
@@ -85,10 +85,15 @@ export class PromptInjectionRagGraphFactory {
     };
   }
 
-  /** Render each record to text and split it into overlapping chunks. */
-  private chunkCorpus(
+  /**
+   * Render each record to text and split it into overlapping chunks with
+   * LangChain's RecursiveCharacterTextSplitter — the recommended splitter for
+   * generic text, which keeps the largest structural unit that fits (paragraph
+   * before line before word).
+   */
+  private async chunkCorpus(
     state: PromptInjectionRagState,
-  ): Partial<PromptInjectionRagState> {
+  ): Promise<Partial<PromptInjectionRagState>> {
     const chunkSize =
       this.configService.get<number>(
         'whatsappAgent.promptInjectionRag.chunkSize',
@@ -98,12 +103,15 @@ export class PromptInjectionRagGraphFactory {
         'whatsappAgent.promptInjectionRag.chunkOverlap',
       ) ?? 120;
 
+    const splitter = new RecursiveCharacterTextSplitter({
+      chunkSize,
+      chunkOverlap,
+    });
+
     const chunks: PromptInjectionChunk[] = [];
     for (const record of state.records) {
-      const parts = splitText(
+      const parts = await splitter.splitText(
         this.resourceService.toDocument(record),
-        chunkSize,
-        chunkOverlap,
       );
       parts.forEach((content, chunkIndex) => {
         chunks.push({
