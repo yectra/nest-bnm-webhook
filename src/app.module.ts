@@ -20,6 +20,7 @@ import { BotModule } from './modules/bot/bot.module';
 import { EmbeddingModule } from './modules/embedding/embedding.module';
 import { SearchModule } from './modules/search/search.module';
 import { AgentCrewModule } from './modules/agent-crew/agent-crew.module';
+import { PromptGuardModule } from './modules/prompt-guard/prompt-guard.module';
 import { WhatsappAgentModule } from './modules/whatsapp-agent/whatsapp-agent.module';
 
 @Module({
@@ -89,6 +90,34 @@ import { WhatsappAgentModule } from './modules/whatsapp-agent/whatsapp-agent.mod
           .default('PostYourRequirements'),
         AGENT_CREW_PII_LLM_REVIEW: Joi.boolean().default(true),
         CHATBOT_VECTOR_MIN_SIMILARITY: Joi.number().min(-1).max(1).default(0.7),
+        // Prompt-injection guard (LangGraph + RAG over known injection
+        // messages embedded with text-embedding-3-small).
+        PROMPT_GUARD_CONTAINER: Joi.string()
+          .min(1)
+          .default('PromptInjectionSignatures'),
+        PROMPT_GUARD_TOP_K: Joi.number().integer().min(1).max(25).default(8),
+        // Neighbours below this cosine similarity do not vote.
+        PROMPT_GUARD_MIN_SIMILARITY: Joi.number().min(0).max(1).default(0.45),
+        // A neighbour this close to a known injection decides the case alone.
+        PROMPT_GUARD_HIGH_SIMILARITY: Joi.number().min(0).max(1).default(0.86),
+        // Fused score at or above this is reported as an injection.
+        PROMPT_GUARD_DECISION_THRESHOLD: Joi.number().min(0).max(1).default(0.6),
+        // Half-width of the band around the threshold that escalates to the judge.
+        PROMPT_GUARD_JUDGE_BAND: Joi.number().min(0).max(0.5).default(0.18),
+        PROMPT_GUARD_LLM_JUDGE: Joi.boolean().default(true),
+        // GPT-5 deployment for the judge; falls back to AGENT_CREW_MODEL, then
+        // OPENAI_MODEL.
+        PROMPT_GUARD_MODEL: Joi.string().min(1).optional(),
+        // Seeding costs embedding calls, so it is opt-in at boot; the
+        // API-key-protected seed endpoint is the normal path.
+        PROMPT_GUARD_AUTO_SEED: Joi.boolean().default(false),
+        PROMPT_GUARD_MAX_INPUT_CHARS: Joi.number()
+          .integer()
+          .min(200)
+          .max(50000)
+          .default(8000),
+        // Extra event payload field names to check before the defaults.
+        PROMPT_GUARD_EVENT_TEXT_FIELDS: Joi.string().allow('').optional(),
         COSMOS_ENDPOINT: Joi.string().uri().required(),
         COSMOS_KEY: Joi.string().min(1).required(),
         COSMOS_DATABASE: Joi.string().min(1).required(),
@@ -124,6 +153,8 @@ import { WhatsappAgentModule } from './modules/whatsapp-agent/whatsapp-agent.mod
 
     AgentCrewModule,
     WhatsappAgentModule,
+
+    PromptGuardModule,
   ],
   providers: [
     {

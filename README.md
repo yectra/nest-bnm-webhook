@@ -187,6 +187,38 @@ Configuration: `AGENT_CREW_MODEL` (GPT-5 deployment name, defaults to
 `AGENT_CREW_QUOTE_CONTAINER`, `AGENT_CREW_REQUIREMENTS_CONTAINER`,
 `AGENT_CREW_PII_LLM_REVIEW`.
 
+## Prompt-injection guard
+
+`POST /api/prompt-guard/events` listens for events (single or Azure Event Grid
+batch, handshake included) and answers whether the text they carry contains a
+prompt injection. `POST /api/prompt-guard/detect` does the same for a single
+string.
+
+The detector is a LangGraph pipeline over a Cosmos DB vector index of known
+prompt-injection messages embedded with `text-embedding-3-small`: a
+deterministic pattern scan and the RAG retrieval run in parallel, a weighted
+k-NN vote over the retrieved signatures produces the primary signal, and a
+GPT-5 judge adjudicates only when those signals are inconclusive. The response
+carries the verdict, the retrieved neighbours that justify it, the risk level
+and a recommended action (`allow` / `review` / `block`).
+
+Seed the index once per environment (idempotent, re-run after adding
+signatures):
+
+```bash
+curl -X POST https://your-app/api/prompt-guard/signatures/seed \
+  -H 'x-api-key: <API_KEY>' -H 'Content-Type: application/json' -d '{}'
+```
+
+Configuration: `PROMPT_GUARD_CONTAINER`, `PROMPT_GUARD_TOP_K`,
+`PROMPT_GUARD_MIN_SIMILARITY`, `PROMPT_GUARD_HIGH_SIMILARITY`,
+`PROMPT_GUARD_DECISION_THRESHOLD`, `PROMPT_GUARD_JUDGE_BAND`,
+`PROMPT_GUARD_LLM_JUDGE`, `PROMPT_GUARD_MODEL`, `PROMPT_GUARD_AUTO_SEED`,
+`PROMPT_GUARD_MAX_INPUT_CHARS`, `PROMPT_GUARD_EVENT_TEXT_FIELDS`.
+
+Full details, including the scoring model and how to add signatures:
+[docs/prompt-injection-guard.md](docs/prompt-injection-guard.md).
+
 ## Twilio WhatsApp configuration
 
 In the Twilio console for your WhatsApp sender:
