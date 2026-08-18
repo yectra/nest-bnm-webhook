@@ -10,6 +10,7 @@ import twilioConfig from './config/twilio.config';
 import azureConfig from './config/azure.config';
 import databaseConfig from './config/database.config';
 import whatsappAgentConfig from './config/whatsapp-agent.config';
+import internalEventsConfig from './config/internal-events.config';
 
 import { HealthModule } from './modules/health/health.module';
 import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
@@ -21,6 +22,7 @@ import { EmbeddingModule } from './modules/embedding/embedding.module';
 import { SearchModule } from './modules/search/search.module';
 import { AgentCrewModule } from './modules/agent-crew/agent-crew.module';
 import { WhatsappAgentModule } from './modules/whatsapp-agent/whatsapp-agent.module';
+import { InternalEventsModule } from './modules/internal-events/internal-events.module';
 
 @Module({
   imports: [
@@ -33,6 +35,7 @@ import { WhatsappAgentModule } from './modules/whatsapp-agent/whatsapp-agent.mod
         azureConfig,
         databaseConfig,
         whatsappAgentConfig,
+        internalEventsConfig,
       ],
       validationSchema: Joi.object({
         NODE_ENV: Joi.string()
@@ -96,6 +99,21 @@ import { WhatsappAgentModule } from './modules/whatsapp-agent/whatsapp-agent.mod
         WHATSAPP_AGENT_LLM_BASE_URL: Joi.string().uri().optional(),
         WHATSAPP_AGENT_LLM_API_KEY: Joi.string().optional(),
         WHATSAPP_AGENT_LLM_MODEL: Joi.string().optional(),
+        // Internal-only event listener (/api/internal/events/*). Disabled by
+        // default; when enabled it is reachable from Azure-internal callers
+        // only and requires INTERNAL_EVENTS_KEY.
+        INTERNAL_EVENTS_ENABLED: Joi.boolean().default(false),
+        INTERNAL_EVENTS_KEY: Joi.when('INTERNAL_EVENTS_ENABLED', {
+          is: true,
+          then: Joi.string().min(32).required(),
+          otherwise: Joi.string().min(32).optional(),
+        }),
+        // Comma-separated CIDRs allowed on top of the built-in private ranges,
+        // for example the subnet behind a private endpoint.
+        INTERNAL_EVENTS_ALLOWED_CIDRS: Joi.string().allow('').optional(),
+        INTERNAL_EVENTS_ALLOWED_ORIGIN: Joi.string()
+          .min(1)
+          .default('eventgrid.azure.net'),
         // Embedding preview/backfill routes are administrative and must never be
         // exposed without a key in production.
         API_KEY: Joi.when('NODE_ENV', {
@@ -124,6 +142,8 @@ import { WhatsappAgentModule } from './modules/whatsapp-agent/whatsapp-agent.mod
 
     AgentCrewModule,
     WhatsappAgentModule,
+
+    InternalEventsModule,
   ],
   providers: [
     {

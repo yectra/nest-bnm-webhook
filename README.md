@@ -50,6 +50,8 @@ COSMOS_ENDPOINT=https://your-account.documents.azure.com:443/
 COSMOS_KEY=your_cosmos_key
 COSMOS_DATABASE=your_database_name
 API_KEY=a-long-random-administrative-api-key
+INTERNAL_EVENTS_ENABLED=false
+INTERNAL_EVENTS_KEY=a-long-random-internal-event-key
 ```
 
 Notes:
@@ -63,6 +65,8 @@ Notes:
 - `TWILIO_WEBHOOK_SECRET` is optional. Real Twilio requests are validated with the Twilio auth token.
 - `EMBEDDING_MODEL` must be the Azure deployment name. `text-embedding-3-small`
   should use 1536 dimensions; all Cosmos vector containers must use the same value.
+- `INTERNAL_EVENTS_*` configure the internal-only event listener; see
+  [Internal event listener](#internal-event-listener-hello-world) below.
 
 ## Embeddings and semantic search
 
@@ -137,6 +141,39 @@ Frontier models are never required. Later increments add the Event Grid
 consumer that answers inbound WhatsApp messages
 (`BNM_WHATSAPP_RECEIVED_FROM_JAVA_EVENT`), the grounded support agent, the
 adversarial-input guard, and the PII output filter.
+
+## Internal event listener (hello world)
+
+`POST /api/internal/events/hello` is a "hello world" event listener that is
+**not open to the public**: it answers only callers that reach the app from
+inside Azure. It accepts the Event Grid schema and CloudEvents v1.0, answers
+both subscription handshakes, and logs a greeting for every event received.
+
+```env
+INTERNAL_EVENTS_ENABLED=true
+INTERNAL_EVENTS_KEY=a-long-random-internal-event-key
+# Optional: extra CIDRs on top of the built-in private/Azure-internal ranges.
+INTERNAL_EVENTS_ALLOWED_CIDRS=10.20.0.0/16
+INTERNAL_EVENTS_ALLOWED_ORIGIN=eventgrid.azure.net
+```
+
+Access is restricted in three independent ways:
+
+1. **Azure network controls** — a private endpoint (or access restrictions with
+   the `AzureEventGrid` service tag plus a deny-all rule) keeps public traffic
+   from reaching the app at all. Configure this in Azure; see the doc below.
+2. **`AzureInternalGuard`** — the socket peer and every `X-Forwarded-For` hop
+   must be a private/Azure-internal address (public callers get `403`), and the
+   caller must present `INTERNAL_EVENTS_KEY` in `x-internal-event-key` (`401`
+   otherwise). It fails closed with `503` while disabled or unconfigured.
+3. **Not published** — the routes are excluded from Swagger, and CORS is
+   disabled for everything under `/api/internal`.
+
+Note that the global `MainEnvBlockGuard` still applies: as with every other
+route, run this on a slot where `APP_ENV` is `dev` or `stage`.
+
+Full Azure setup, Event Grid subscription commands, and verification steps are
+in [docs/internal-hello-event-listener.md](docs/internal-hello-event-listener.md).
 
 ## LangGraph agent crew
 
