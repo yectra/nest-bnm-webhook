@@ -66,6 +66,21 @@ describe('EventSecurityGuard', () => {
       const result = await guard.canActivate(context);
       expect(result).toBe(true);
     });
+
+    it('should allow Azure Event Grid SubscriptionValidationEvent without security key', async () => {
+      const context = createMockContext(
+        {},
+        [
+          {
+            id: 'validation-id-123',
+            eventType: 'Microsoft.EventGrid.SubscriptionValidationEvent',
+            data: { validationCode: 'code-xyz-123' },
+          },
+        ],
+      );
+      const result = await guard.canActivate(context);
+      expect(result).toBe(true);
+    });
   });
 
   describe('Invalid Key Scenarios', () => {

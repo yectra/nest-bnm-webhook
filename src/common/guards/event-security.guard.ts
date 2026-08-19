@@ -17,6 +17,15 @@ export class EventSecurityGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<Request>();
+
+    // Allow Azure Event Grid Subscription Validation Handshake without security key
+    if (this.isSubscriptionValidationEvent(request)) {
+      this.logger.log(
+        'Bypassing security guard for Azure Event Grid Subscription Validation Handshake',
+      );
+      return true;
+    }
+
     const incomingKey = this.extractSecurityKey(request);
 
     if (!incomingKey) {
@@ -106,5 +115,17 @@ export class EventSecurityGuard implements CanActivate {
     }
 
     return null;
+  }
+
+  private isSubscriptionValidationEvent(request: Request): boolean {
+    const body = request.body as Record<string, any> | Array<Record<string, any>> | undefined;
+    if (!body) return false;
+    const events = Array.isArray(body) ? body : [body];
+    return events.some(
+      (event) =>
+        event &&
+        typeof event === 'object' &&
+        event.eventType === 'Microsoft.EventGrid.SubscriptionValidationEvent',
+    );
   }
 }
