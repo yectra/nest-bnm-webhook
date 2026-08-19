@@ -23,6 +23,8 @@
   },
   "dependencies": {
     "@azure/cosmos": "^4.9.3",
+    "@azure/identity": "^4.5.0",
+    "@azure/keyvault-secrets": "^4.9.0",
     "@langchain/core": "^1.2.4",
     "@langchain/langgraph": "^1.4.8",
     "@langchain/openai": "^1.5.6",
