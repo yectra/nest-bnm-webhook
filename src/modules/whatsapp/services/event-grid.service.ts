@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PostYourRequirementsAgentService } from '../../whatsapp-agent/services/post-your-requirements-agent.service';
 
@@ -28,8 +28,8 @@ export class EventGridService {
 
   constructor(
     private readonly configService: ConfigService,
-    @Inject(forwardRef(() => PostYourRequirementsAgentService))
-    private readonly postYourRequirementsAgentService: PostYourRequirementsAgentService,
+    @Optional()
+    private readonly postYourRequirementsAgentService?: any,
   ) {}
 
   async processEvent(payload: EventGridEvent | EventGridEvent[]) {
@@ -53,10 +53,24 @@ export class EventGridService {
       }
 
       const typeName = event?.eventType || event?.eventName || 'UNKNOWN_EVENT';
-      const innerPayload = (event?.payload || event?.data || {}) as Record<string, any>;
 
-      // Log captured event details for EVERY incoming event (BNM_WHATSAPP_RECEIVED_FROM_JAVA_EVENT or any other event)
+      // Log captured event details for EVERY incoming event
       this.logCapturedEvent(event);
+
+      // Handle Post Your Requirements Agent service integration if present
+      if (
+        typeName === 'POST_YOUR_REQUIREMENTS' &&
+        this.postYourRequirementsAgentService?.processEvent
+      ) {
+        const agentReply = await this.postYourRequirementsAgentService.processEvent(event);
+        results.push({
+          status: 'success',
+          eventId: event?.id || event?.eventId || 'N/A',
+          eventType: typeName,
+          agentReply,
+        });
+        continue;
+      }
 
       results.push({
         status: 'success',
