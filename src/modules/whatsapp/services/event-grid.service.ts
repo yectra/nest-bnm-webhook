@@ -3,10 +3,14 @@ import { ConfigService } from '@nestjs/config';
 
 export interface EventGridEvent<T = any> {
   id?: string;
+  eventId?: string;
   eventType?: string;
+  eventName?: string;
   subject?: string;
   eventTime?: string;
+  eventTimestamp?: string;
   data?: T;
+  payload?: T;
   topic?: string;
   dataVersion?: string;
   metadataVersion?: string;
@@ -32,7 +36,7 @@ export class EventGridService {
       if (
         event?.eventType === 'Microsoft.EventGrid.SubscriptionValidationEvent'
       ) {
-        const validationData = event.data as SubscriptionValidationData;
+        const validationData = (event.data || event.payload) as SubscriptionValidationData;
         const validationCode = validationData?.validationCode;
 
         this.logger.log(
@@ -43,23 +47,29 @@ export class EventGridService {
         continue;
       }
 
-      // Log event details if matching target event or standard Event Grid event
-      if (event?.eventType === 'BNM_WHATSAPP_RECEIVED_FROM_JAVA_EVENT') {
+      const typeName = event?.eventType || event?.eventName;
+      const innerPayload = (event?.payload || event?.data || {}) as Record<string, any>;
+
+      // Log event details if matching target event or standard Event Grid event or contains signature
+      if (
+        typeName === 'BNM_WHATSAPP_RECEIVED_FROM_JAVA_EVENT' ||
+        (innerPayload?.signature && (innerPayload?.contact || innerPayload?.textMessage))
+      ) {
         this.logCapturedEvent(event);
         results.push({
           status: 'success',
-          eventId: event.id,
-          eventType: event.eventType,
+          eventId: event.id || event.eventId,
+          eventType: typeName || 'BNM_WHATSAPP_RECEIVED_FROM_JAVA_EVENT',
         });
       } else {
         this.logger.warn(
-          `[Azure Event Grid] Received unknown or unhandled event type: ${event?.eventType}`,
+          `[Azure Event Grid] Received unknown or unhandled event type: ${typeName}`,
         );
         this.logCapturedEvent(event);
         results.push({
           status: 'ignored',
-          eventId: event?.id,
-          eventType: event?.eventType,
+          eventId: event?.id || event?.eventId,
+          eventType: typeName,
         });
       }
     }
@@ -99,11 +109,11 @@ export class EventGridService {
     };
 
     const eventDetails = {
-      eventName: event.eventType || 'N/A',
-      eventId: event.id || 'N/A',
-      eventTimestamp: event.eventTime || 'N/A',
+      eventName: event.eventType || event.eventName || 'N/A',
+      eventId: event.id || event.eventId || 'N/A',
+      eventTimestamp: event.eventTime || event.eventTimestamp || 'N/A',
       subject: event.subject || event.topic || 'N/A',
-      payload: event.data ?? {},
+      payload: event.payload ?? event.data ?? {},
     };
 
     this.logger.log(
