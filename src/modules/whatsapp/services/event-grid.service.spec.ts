@@ -5,7 +5,7 @@ import { PostYourRequirementsAgentService } from '../../whatsapp-agent/services/
 describe('EventGridService', () => {
   let service: EventGridService;
   let configService: ConfigService;
-  let postYourRequirementsAgentService: jest.Mocked<PostYourRequirementsAgentService>;
+  let postYourRequirementsAgentService: { processEvent: jest.Mock };
 
   beforeEach(() => {
     configService = {
@@ -17,8 +17,8 @@ describe('EventGridService', () => {
     } as unknown as ConfigService;
 
     postYourRequirementsAgentService = {
-      processEvent: jest.fn().mockResolvedValue('Agent processed the requirement successfully.'),
-    } as unknown as jest.Mocked<PostYourRequirementsAgentService>;
+      processEvent: jest.fn().mockResolvedValue({ status: 'processed_by_agent' }),
+    };
 
     service = new EventGridService(configService, postYourRequirementsAgentService);
   });
@@ -94,6 +94,29 @@ describe('EventGridService', () => {
     });
   });
 
+  it('should log unknown event types without throwing errors', async () => {
+    const unknownEvent = [
+      {
+        id: 'unknown-001',
+        eventType: 'SOME_OTHER_EVENT',
+        data: { foo: 'bar' },
+      },
+    ];
+
+    const result = await service.processEvent(unknownEvent);
+    expect(result).toEqual({
+      message: 'Event Grid payload processed successfully',
+      processedCount: 1,
+      results: [
+        {
+          status: 'success',
+          eventId: 'unknown-001',
+          eventType: 'SOME_OTHER_EVENT',
+        },
+      ],
+    });
+  });
+
   it('should invoke the PostYourRequirements agent and include agentReply in result', async () => {
     const eventPayload = [
       {
@@ -122,30 +145,7 @@ describe('EventGridService', () => {
           status: 'success',
           eventId: 'pyr-evt-001',
           eventType: 'POST_YOUR_REQUIREMENTS',
-          agentReply: 'Agent processed the requirement successfully.',
-        },
-      ],
-    });
-  });
-
-  it('should log unknown event types without throwing errors', async () => {
-    const unknownEvent = [
-      {
-        id: 'unknown-001',
-        eventType: 'SOME_OTHER_EVENT',
-        data: { foo: 'bar' },
-      },
-    ];
-
-    const result = await service.processEvent(unknownEvent);
-    expect(result).toEqual({
-      message: 'Event Grid payload processed successfully',
-      processedCount: 1,
-      results: [
-        {
-          status: 'success',
-          eventId: 'unknown-001',
-          eventType: 'SOME_OTHER_EVENT',
+          agentReply: { status: 'processed_by_agent' },
         },
       ],
     });
