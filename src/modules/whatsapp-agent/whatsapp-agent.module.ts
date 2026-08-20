@@ -4,6 +4,7 @@ import { AgentModelService } from './services/agent-model.service';
 import { HelloAgentService } from './services/hello-agent.service';
 import { LangsmithTracingService } from './services/langsmith-tracing.service';
 import { PostYourRequirementsAgentService } from './services/post-your-requirements-agent.service';
+import { RequestAQuoteAgentService } from './services/request-a-quote-agent.service';
 
 /**
  * WhatsApp deep-agent module (deepagents on @langchain/langgraph).
@@ -20,11 +21,13 @@ import { PostYourRequirementsAgentService } from './services/post-your-requireme
     HelloAgentService,
     LangsmithTracingService,
     PostYourRequirementsAgentService,
+    RequestAQuoteAgentService,
   ],
   exports: [
     AgentModelService,
     LangsmithTracingService,
     PostYourRequirementsAgentService,
+    RequestAQuoteAgentService,
   ],
 })
 export class WhatsappAgentModule {}
