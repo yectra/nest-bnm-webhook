@@ -81,15 +81,18 @@ export class EventSecurityGuard implements CanActivate {
       if (Array.isArray(body)) {
         for (const item of body) {
           if (item && typeof item === 'object') {
-            const dataObj = item.data && typeof item.data === 'object' ? (item.data as Record<string, any>) : {};
+            const innerObj =
+              (item.payload && typeof item.payload === 'object' ? (item.payload as Record<string, any>) : null) ||
+              (item.data && typeof item.data === 'object' ? (item.data as Record<string, any>) : {});
             const key =
               item.securityKey ||
               item.signature ||
               item.key ||
               item.apiKey ||
-              dataObj.securityKey ||
-              dataObj.signature ||
-              dataObj.key;
+              innerObj.securityKey ||
+              innerObj.signature ||
+              innerObj.key ||
+              innerObj.apiKey;
 
             if (typeof key === 'string' && key.trim() !== '') {
               return key.trim();
@@ -98,15 +101,18 @@ export class EventSecurityGuard implements CanActivate {
         }
       } else if (typeof body === 'object') {
         const bodyObj = body as Record<string, any>;
-        const dataObj = bodyObj.data && typeof bodyObj.data === 'object' ? (bodyObj.data as Record<string, any>) : {};
+        const innerObj =
+          (bodyObj.payload && typeof bodyObj.payload === 'object' ? (bodyObj.payload as Record<string, any>) : null) ||
+          (bodyObj.data && typeof bodyObj.data === 'object' ? (bodyObj.data as Record<string, any>) : {});
         const key =
           bodyObj.securityKey ||
           bodyObj.signature ||
           bodyObj.key ||
           bodyObj.apiKey ||
-          dataObj.securityKey ||
-          dataObj.signature ||
-          dataObj.key;
+          innerObj.securityKey ||
+          innerObj.signature ||
+          innerObj.key ||
+          innerObj.apiKey;
 
         if (typeof key === 'string' && key.trim() !== '') {
           return key.trim();
