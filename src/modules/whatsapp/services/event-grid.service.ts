@@ -4,10 +4,14 @@ import { PostYourRequirementsAgentService } from '../../whatsapp-agent/services/
 
 export interface EventGridEvent<T = any> {
   id?: string;
+  eventId?: string;
   eventType?: string;
+  eventName?: string;
   subject?: string;
   eventTime?: string;
+  eventTimestamp?: string;
   data?: T;
+  payload?: T;
   topic?: string;
   dataVersion?: string;
   metadataVersion?: string;
@@ -37,7 +41,7 @@ export class EventGridService {
       if (
         event?.eventType === 'Microsoft.EventGrid.SubscriptionValidationEvent'
       ) {
-        const validationData = event.data as SubscriptionValidationData;
+        const validationData = (event.data || event.payload) as SubscriptionValidationData;
         const validationCode = validationData?.validationCode;
 
         this.logger.log(
@@ -48,50 +52,17 @@ export class EventGridService {
         continue;
       }
 
-      // WhatsApp message received from Java backend
-      if (event?.eventType === 'BNM_WHATSAPP_RECEIVED_FROM_JAVA_EVENT') {
-        this.logCapturedEvent(event);
-        results.push({
-          status: 'success',
-          eventId: event.id,
-          eventType: event.eventType,
-        });
-      }
+      const typeName = event?.eventType || event?.eventName || 'UNKNOWN_EVENT';
+      const innerPayload = (event?.payload || event?.data || {}) as Record<string, any>;
 
-      // Property requirement submitted — run the dedicated agent and trace to LangSmith
-      else if (event?.eventType === 'POST_YOUR_REQUIREMENTS') {
-        this.logCapturedEvent(event);
+      // Log captured event details for EVERY incoming event (BNM_WHATSAPP_RECEIVED_FROM_JAVA_EVENT or any other event)
+      this.logCapturedEvent(event);
 
-        this.logger.log(
-          `[Azure Event Grid] POST_YOUR_REQUIREMENTS event received (id: ${event.id}). Invoking agent...`,
-        );
-
-        const agentReply =
-          await this.postYourRequirementsAgentService.processEvent(event);
-
-        this.logger.log(
-          `[Azure Event Grid] POST_YOUR_REQUIREMENTS agent reply: ${agentReply}`,
-        );
-
-        results.push({
-          status: 'success',
-          eventId: event.id,
-          eventType: event.eventType,
-          agentReply,
-        });
-      }
-
-      else {
-        this.logger.warn(
-          `[Azure Event Grid] Received unknown or unhandled event type: ${event?.eventType}`,
-        );
-        this.logCapturedEvent(event);
-        results.push({
-          status: 'ignored',
-          eventId: event?.id,
-          eventType: event?.eventType,
-        });
-      }
+      results.push({
+        status: 'success',
+        eventId: event?.id || event?.eventId || 'N/A',
+        eventType: typeName,
+      });
     }
 
     // Return validation response for subscription handshake if present
@@ -129,11 +100,11 @@ export class EventGridService {
     };
 
     const eventDetails = {
-      eventName: event.eventType || 'N/A',
-      eventId: event.id || 'N/A',
-      eventTimestamp: event.eventTime || 'N/A',
+      eventName: event.eventType || event.eventName || 'N/A',
+      eventId: event.id || event.eventId || 'N/A',
+      eventTimestamp: event.eventTime || event.eventTimestamp || 'N/A',
       subject: event.subject || event.topic || 'N/A',
-      payload: event.data ?? {},
+      payload: event.payload ?? event.data ?? {},
     };
 
     this.logger.log(

@@ -143,7 +143,7 @@ describe('EventGridService', () => {
       processedCount: 1,
       results: [
         {
-          status: 'ignored',
+          status: 'success',
           eventId: 'unknown-001',
           eventType: 'SOME_OTHER_EVENT',
         },
