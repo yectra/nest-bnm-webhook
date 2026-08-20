@@ -6,6 +6,8 @@ import { MessageService } from './services/message.service';
 import { WebhookService } from './services/webhook.service';
 import { CallbackService } from './services/callback.service';
 import { EventGridService } from './services/event-grid.service';
+import { KeyVaultService } from '../../common/services/key-vault.service';
+import { EventSecurityGuard } from '../../common/guards/event-security.guard';
 
 @Module({
   controllers: [WebhookController, MessageController],
@@ -15,6 +17,8 @@ import { EventGridService } from './services/event-grid.service';
     WebhookService,
     CallbackService,
     EventGridService,
+    KeyVaultService,
+    EventSecurityGuard,
   ],
   exports: [
     TwilioService,
@@ -22,6 +26,8 @@ import { EventGridService } from './services/event-grid.service';
     WebhookService,
     CallbackService,
     EventGridService,
+    KeyVaultService,
+    EventSecurityGuard,
   ],
 })
 export class WhatsappModule {}
