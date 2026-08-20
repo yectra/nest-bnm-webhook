@@ -47,31 +47,17 @@ export class EventGridService {
         continue;
       }
 
-      const typeName = event?.eventType || event?.eventName;
+      const typeName = event?.eventType || event?.eventName || 'UNKNOWN_EVENT';
       const innerPayload = (event?.payload || event?.data || {}) as Record<string, any>;
 
-      // Log event details if matching target event or standard Event Grid event or contains signature
-      if (
-        typeName === 'BNM_WHATSAPP_RECEIVED_FROM_JAVA_EVENT' ||
-        (innerPayload?.signature && (innerPayload?.contact || innerPayload?.textMessage))
-      ) {
-        this.logCapturedEvent(event);
-        results.push({
-          status: 'success',
-          eventId: event.id || event.eventId,
-          eventType: typeName || 'BNM_WHATSAPP_RECEIVED_FROM_JAVA_EVENT',
-        });
-      } else {
-        this.logger.warn(
-          `[Azure Event Grid] Received unknown or unhandled event type: ${typeName}`,
-        );
-        this.logCapturedEvent(event);
-        results.push({
-          status: 'ignored',
-          eventId: event?.id || event?.eventId,
-          eventType: typeName,
-        });
-      }
+      // Log captured event details for EVERY incoming event (BNM_WHATSAPP_RECEIVED_FROM_JAVA_EVENT or any other event)
+      this.logCapturedEvent(event);
+
+      results.push({
+        status: 'success',
+        eventId: event?.id || event?.eventId || 'N/A',
+        eventType: typeName,
+      });
     }
 
     // Return validation response for subscription handshake if present
