@@ -6,6 +6,7 @@ import { WebhookService } from '../services/webhook.service';
 import { CallbackService } from '../services/callback.service';
 import { EventGridService } from '../services/event-grid.service';
 import { EventSecurityGuard } from '../../../common/guards/event-security.guard';
+import { Public } from 'src/common/decorators/public.decorator';
 
 @ApiTags('Webhook')
 @Controller('webhook')
@@ -32,6 +33,7 @@ export class WebhookController {
     return this.callbackService.handleStatusCallback(body);
   }
 
+  @Public()
   @Post('event-grid')
   @UseGuards(EventSecurityGuard)
   receiveEventGridEvent(@Body() body: any) {
