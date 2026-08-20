@@ -7,6 +7,8 @@ import { WebhookService } from './services/webhook.service';
 import { CallbackService } from './services/callback.service';
 import { EventGridService } from './services/event-grid.service';
 import { WhatsappAgentModule } from '../whatsapp-agent/whatsapp-agent.module';
+import { KeyVaultService } from '../../common/services/key-vault.service';
+import { EventSecurityGuard } from '../../common/guards/event-security.guard';
 
 @Module({
   imports: [forwardRef(() => WhatsappAgentModule)],
@@ -17,6 +19,8 @@ import { WhatsappAgentModule } from '../whatsapp-agent/whatsapp-agent.module';
     WebhookService,
     CallbackService,
     EventGridService,
+    KeyVaultService,
+    EventSecurityGuard,
   ],
   exports: [
     TwilioService,
@@ -24,6 +28,8 @@ import { WhatsappAgentModule } from '../whatsapp-agent/whatsapp-agent.module';
     WebhookService,
     CallbackService,
     EventGridService,
+    KeyVaultService,
+    EventSecurityGuard,
   ],
 })
 export class WhatsappModule {}
