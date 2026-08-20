@@ -1,5 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { PostYourRequirementsAgentService } from '../../whatsapp-agent/services/post-your-requirements-agent.service';
 
 export interface EventGridEvent<T = any> {
   id?: string;
@@ -21,9 +22,13 @@ export interface SubscriptionValidationData {
 export class EventGridService {
   private readonly logger = new Logger(EventGridService.name);
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    @Inject(forwardRef(() => PostYourRequirementsAgentService))
+    private readonly postYourRequirementsAgentService: PostYourRequirementsAgentService,
+  ) {}
 
-  processEvent(payload: EventGridEvent | EventGridEvent[]) {
+  async processEvent(payload: EventGridEvent | EventGridEvent[]) {
     const events = Array.isArray(payload) ? payload : [payload];
     const results: any[] = [];
 
@@ -43,7 +48,7 @@ export class EventGridService {
         continue;
       }
 
-      // Log event details if matching target event or standard Event Grid event
+      // WhatsApp message received from Java backend
       if (event?.eventType === 'BNM_WHATSAPP_RECEIVED_FROM_JAVA_EVENT') {
         this.logCapturedEvent(event);
         results.push({
@@ -51,7 +56,32 @@ export class EventGridService {
           eventId: event.id,
           eventType: event.eventType,
         });
-      } else {
+      }
+
+      // Property requirement submitted — run the dedicated agent and trace to LangSmith
+      else if (event?.eventType === 'POST_YOUR_REQUIREMENTS') {
+        this.logCapturedEvent(event);
+
+        this.logger.log(
+          `[Azure Event Grid] POST_YOUR_REQUIREMENTS event received (id: ${event.id}). Invoking agent...`,
+        );
+
+        const agentReply =
+          await this.postYourRequirementsAgentService.processEvent(event);
+
+        this.logger.log(
+          `[Azure Event Grid] POST_YOUR_REQUIREMENTS agent reply: ${agentReply}`,
+        );
+
+        results.push({
+          status: 'success',
+          eventId: event.id,
+          eventType: event.eventType,
+          agentReply,
+        });
+      }
+
+      else {
         this.logger.warn(
           `[Azure Event Grid] Received unknown or unhandled event type: ${event?.eventType}`,
         );

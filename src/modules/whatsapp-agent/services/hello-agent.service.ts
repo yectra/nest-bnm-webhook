@@ -30,6 +30,7 @@ export class HelloAgentService {
   ) {}
 
   async run(message: string): Promise<string> {
+    console.log('message', message);
     const model = this.agentModelService.createModel();
     return this.runWithModel(message, model);
   }
@@ -57,6 +58,7 @@ export class HelloAgentService {
         model,
         systemPrompt: HELLO_SYSTEM_PROMPT,
       });
+
       const result = await agent.invoke(
         {
           messages: [{ role: 'user', content: message }],
