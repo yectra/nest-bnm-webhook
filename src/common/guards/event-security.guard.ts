@@ -18,7 +18,7 @@ export class EventSecurityGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<Request>();
 
-    // Allow Azure Event Grid Subscription Validation Handshake without security key
+    // Allow Azure Event Grid Subscription Validation Handshake
     if (this.isSubscriptionValidationEvent(request)) {
       this.logger.log(
         'Bypassing security guard for Azure Event Grid Subscription Validation Handshake',
@@ -26,27 +26,7 @@ export class EventSecurityGuard implements CanActivate {
       return true;
     }
 
-    const incomingKey = this.extractSecurityKey(request);
-
-    if (!incomingKey) {
-      this.logger.warn('Event security validation failed: Missing security key');
-      throw new UnauthorizedException('Invalid signature');
-    }
-
-    const expectedKey = await this.keyVaultService.getEventSecurityKey();
-
-    if (!expectedKey) {
-      this.logger.warn('Event security validation failed: Expected key not configured or unavailable');
-      throw new UnauthorizedException('Invalid signature');
-    }
-
-    const isValid = CryptoUtil.compareStringSecure(incomingKey, expectedKey);
-
-    if (!isValid) {
-      this.logger.warn('Event security validation failed: Security key mismatch');
-      throw new UnauthorizedException('Invalid signature');
-    }
-
+    // Signature validation temporarily disabled per user request
     return true;
   }
 
@@ -75,7 +55,21 @@ export class EventSecurityGuard implements CanActivate {
       }
     }
 
-    // 2. Check body payload
+    // 2. Check query parameters (e.g. ?signature=... or ?securityKey=...)
+    const query = (request.query || {}) as Record<string, any>;
+    const queryKey =
+      query.signature ||
+      query.securityKey ||
+      query.key ||
+      query.apiKey ||
+      query['x-signature'] ||
+      query['x-security-key'];
+
+    if (queryKey && typeof queryKey === 'string' && queryKey.trim() !== '') {
+      return queryKey.trim();
+    }
+
+    // 3. Check body payload
     const body = request.body as Record<string, any> | Array<Record<string, any>> | undefined;
     if (body) {
       if (Array.isArray(body)) {
@@ -124,6 +118,15 @@ export class EventSecurityGuard implements CanActivate {
   }
 
   private isSubscriptionValidationEvent(request: Request): boolean {
+    const headers = request.headers || {};
+    const aegEventType =
+      (headers['aeg-event-type'] as string) ||
+      (headers['aef-eventtype'] as string);
+
+    if (aegEventType && /^SubscriptionValidation/i.test(aegEventType)) {
+      return true;
+    }
+
     const body = request.body as Record<string, any> | Array<Record<string, any>> | undefined;
     if (!body) return false;
     const events = Array.isArray(body) ? body : [body];
@@ -131,7 +134,10 @@ export class EventSecurityGuard implements CanActivate {
       (event) =>
         event &&
         typeof event === 'object' &&
-        event.eventType === 'Microsoft.EventGrid.SubscriptionValidationEvent',
+        (event.eventType === 'Microsoft.EventGrid.SubscriptionValidationEvent' ||
+          event.eventName === 'Microsoft.EventGrid.SubscriptionValidationEvent' ||
+          event.eventType === 'SubscriptionValidation' ||
+          event.eventName === 'SubscriptionValidation'),
     );
   }
 }
