@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger, Optional, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PostYourRequirementsAgentService } from '../../whatsapp-agent/services/post-your-requirements-agent.service';
+import { RequestAQuoteAgentService } from '../../whatsapp-agent/services/request-a-quote-agent.service';
 
 export interface EventGridEvent<T = any> {
   id?: string;
@@ -30,6 +31,8 @@ export class EventGridService {
     private readonly configService: ConfigService,
     @Inject(forwardRef(() => PostYourRequirementsAgentService))
     private readonly postYourRequirementsAgentService: PostYourRequirementsAgentService,
+    @Inject(forwardRef(() => RequestAQuoteAgentService))
+    private readonly requestAQuoteAgentService: RequestAQuoteAgentService,
   ) {}
 
   async processEvent(payload: EventGridEvent | EventGridEvent[]) {
@@ -63,6 +66,21 @@ export class EventGridService {
         this.postYourRequirementsAgentService?.processEvent
       ) {
         const agentReply = await this.postYourRequirementsAgentService.processEvent(event);
+        results.push({
+          status: 'success',
+          eventId: event?.id || event?.eventId || 'N/A',
+          eventType: typeName,
+          agentReply,
+        });
+        continue;
+      }
+
+      // Handle Request a Quote Agent service integration if present
+      if (
+        typeName === 'QUOTE_CREATED_EVENT' &&
+        this.requestAQuoteAgentService?.processEvent
+      ) {
+        const agentReply = await this.requestAQuoteAgentService.processEvent(event);
         results.push({
           status: 'success',
           eventId: event?.id || event?.eventId || 'N/A',
