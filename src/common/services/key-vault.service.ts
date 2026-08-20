@@ -1,12 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { SecretClient } from '@azure/keyvault-secrets';
-import { DefaultAzureCredential } from '@azure/identity';
 
 @Injectable()
 export class KeyVaultService {
   private readonly logger = new Logger(KeyVaultService.name);
-  private secretClient: SecretClient | null = null;
+  private secretClient: any = null;
 
   constructor(private readonly configService: ConfigService) {
     const keyVaultUrl =
@@ -16,13 +14,19 @@ export class KeyVaultService {
 
     if (keyVaultUrl) {
       try {
+        // Safe dynamic require if @azure packages are present
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { SecretClient } = require('@azure/keyvault-secrets');
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { DefaultAzureCredential } = require('@azure/identity');
+
         const credential = new DefaultAzureCredential();
         this.secretClient = new SecretClient(keyVaultUrl, credential);
         this.logger.log(`KeyVaultService initialized with vault URL: ${keyVaultUrl}`);
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
-        this.logger.error(
-          `Failed to initialize Azure Key Vault client: ${message}`,
+        this.logger.warn(
+          `Azure Key Vault client not initialized (${message}). KeyVaultService will use environment fallback.`,
         );
       }
     } else {
