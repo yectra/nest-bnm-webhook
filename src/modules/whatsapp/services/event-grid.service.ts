@@ -1,5 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { PostYourRequirementsAgentService } from '../../whatsapp-agent/services/post-your-requirements-agent.service';
 
 export interface EventGridEvent<T = any> {
   id?: string;
@@ -25,9 +26,13 @@ export interface SubscriptionValidationData {
 export class EventGridService {
   private readonly logger = new Logger(EventGridService.name);
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    @Inject(forwardRef(() => PostYourRequirementsAgentService))
+    private readonly postYourRequirementsAgentService: PostYourRequirementsAgentService,
+  ) {}
 
-  processEvent(payload: EventGridEvent | EventGridEvent[]) {
+  async processEvent(payload: EventGridEvent | EventGridEvent[]) {
     const events = Array.isArray(payload) ? payload : [payload];
     const results: any[] = [];
 
