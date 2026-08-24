@@ -36,6 +36,7 @@ export class EventGridService {
   ) {}
 
   async processEvent(payload: EventGridEvent | EventGridEvent[]) {
+    console.log(payload,'This is first line within processing event printing payload')
     const events = Array.isArray(payload) ? payload : [payload];
     const results: any[] = [];
 
@@ -69,7 +70,7 @@ export class EventGridService {
         results.push({
           status: 'success',
           eventId: event?.id || event?.eventId || 'N/A',
-          eventType: typeName,
+          eventType: event?.eventType,
           agentReply,
         });
         continue;
@@ -84,7 +85,7 @@ export class EventGridService {
         results.push({
           status: 'success',
           eventId: event?.id || event?.eventId || 'N/A',
-          eventType: typeName,
+          eventType: event?.eventType,
           agentReply,
         });
         continue;
@@ -93,7 +94,7 @@ export class EventGridService {
       results.push({
         status: 'success',
         eventId: event?.id || event?.eventId || 'N/A',
-        eventType: typeName,
+        eventType: event?.eventType,
       });
     }
 
