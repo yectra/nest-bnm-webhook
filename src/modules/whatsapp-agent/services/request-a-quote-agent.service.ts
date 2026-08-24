@@ -56,6 +56,7 @@ export class RequestAQuoteAgentService {
    * eventId, subject and eventTime can be attached to the LangSmith trace.
    */
   async processEvent(event: EventGridEvent): Promise<string> {
+    console.log(event, 'This is second line within request a quote agent printing event', 'eventType:', event?.eventType);
     const model = this.agentModelService.createModel();
     return this.runWithModel(event, model);
   }
@@ -135,6 +136,7 @@ export class RequestAQuoteAgentService {
     return (
       `A new quote request has been submitted via the BNM platform.\n\n` +
       `Event ID   : ${event.id ?? 'N/A'}\n` +
+      `Event Type : ${event.eventType ?? 'N/A'}\n` +
       `Event Time : ${event.eventTime ?? 'N/A'}\n` +
       `Subject    : ${event.subject ?? event.topic ?? 'N/A'}\n\n` +
       `Quote Request Payload:\n${payload}`
