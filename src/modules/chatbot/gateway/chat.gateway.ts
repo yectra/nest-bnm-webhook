@@ -11,6 +11,7 @@ import { Logger, Inject, forwardRef } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { ChatbotService } from '../chatbot.service';
 import { ChatMessageDto } from '../dto/chat-message.dto';
+import { WsAuthService } from '../../auth/services/ws-auth.service';
 
 @WebSocketGateway({
   cors: {
@@ -27,10 +28,22 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   constructor(
     @Inject(forwardRef(() => ChatbotService))
     private readonly chatbotService: ChatbotService,
+    private readonly wsAuth: WsAuthService,
   ) {}
 
-  handleConnection(client: Socket) {
-    this.logger.log(`Website client connected: ${client.id}`);
+  /**
+   * The handshake carries the same Azure AD B2C access token the HTTP routes
+   * require; without a valid one the socket is closed straight away, so the
+   * gateway cannot be used to reach the chatbot around the global guard.
+   */
+  async handleConnection(client: Socket) {
+    const user = await this.wsAuth.authenticateOrDisconnect(client);
+
+    if (user) {
+      this.logger.log(
+        `Website client connected: ${client.id} (userId=${user.userId})`,
+      );
+    }
   }
 
   handleDisconnect(client: Socket) {
@@ -54,11 +67,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: Socket,
     @MessageBody() dto: ChatMessageDto,
   ) {
+    const user = this.wsAuth.getUser(client);
     const conversationId =
       dto.conversationId || dto.sessionId || `session-${client.id}`;
     const result = await this.chatbotService.processMessage({
       ...dto,
       conversationId,
+      userId: dto.userId || user?.userId,
+      tenantId: dto.tenantId || user?.tenantId,
       channel: 'Website',
     });
 

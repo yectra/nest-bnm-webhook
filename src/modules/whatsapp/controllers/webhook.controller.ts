@@ -17,6 +17,9 @@ export class WebhookController {
     private readonly eventGridService: EventGridService,
   ) {}
 
+  // Twilio calls this endpoint directly and proves itself with the request
+  // signature checked in WebhookService, not with a B2C token.
+  @Public()
   @Post('whatsapp')
   @Header('Content-Type', 'text/xml')
   receiveWhatsappMessage(
@@ -28,11 +31,14 @@ export class WebhookController {
     return response.xml;
   }
 
+  // Delivery receipts come from Twilio on the same terms.
+  @Public()
   @Post('whatsapp/status')
   receiveWhatsappStatus(@Body() body: Record<string, string>) {
     return this.callbackService.handleStatusCallback(body);
   }
 
+  // Azure Event Grid presents its own security key (EventSecurityGuard).
   @Public()
   @Post('event-grid')
   @UseGuards(EventSecurityGuard)

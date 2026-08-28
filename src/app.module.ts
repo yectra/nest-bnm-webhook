@@ -4,13 +4,16 @@ import { APP_GUARD } from '@nestjs/core';
 import * as Joi from 'joi';
 
 import { MainEnvBlockGuard } from './common/guards/main-env-block.guard';
+import { AzureB2cAuthGuard } from './modules/auth/guards/azure-b2c-auth.guard';
 
 import appConfig from './config/app.config';
 import twilioConfig from './config/twilio.config';
 import azureConfig from './config/azure.config';
 import databaseConfig from './config/database.config';
 import whatsappAgentConfig from './config/whatsapp-agent.config';
+import azureB2cConfig from './config/azure-b2c.config';
 
+import { AuthModule } from './modules/auth/auth.module';
 import { HealthModule } from './modules/health/health.module';
 import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
 import { AIModule } from './modules/ai/ai.module';
@@ -33,6 +36,7 @@ import { WhatsappAgentModule } from './modules/whatsapp-agent/whatsapp-agent.mod
         azureConfig,
         databaseConfig,
         whatsappAgentConfig,
+        azureB2cConfig,
       ],
       validationSchema: Joi.object({
         NODE_ENV: Joi.string()
@@ -103,6 +107,51 @@ import { WhatsappAgentModule } from './modules/whatsapp-agent/whatsapp-agent.mod
         LANGSMITH_PROJECT: Joi.string().min(1).optional(),
         LANGSMITH_TRACING: Joi.boolean().optional(),
         LANGSMITH_FLUSH_AFTER_RUN: Joi.boolean().optional(),
+        // Azure AD B2C. Every API route requires an access token issued by
+        // this tenant's user flow, so the app must not start without the
+        // settings needed to verify one.
+        // Set only for a B2C custom domain or a non-default cloud, e.g.
+        // https://login.example.com.
+        AZURE_B2C_INSTANCE: Joi.string().uri().optional(),
+        // Full OIDC metadata URL. Overrides the URL derived from the tenant
+        // and policy below; set it for custom policies with unusual hosting.
+        AZURE_B2C_DISCOVERY_URL: Joi.string().uri().optional(),
+        AZURE_B2C_TENANT_NAME: Joi.when('AZURE_B2C_DISCOVERY_URL', {
+          is: Joi.exist(),
+          then: Joi.string().min(1).optional(),
+          otherwise: Joi.string().min(1).required(),
+        }),
+        // Directory the user flow lives in; defaults to <tenant>.onmicrosoft.com.
+        AZURE_B2C_TENANT_DOMAIN: Joi.string().min(1).optional(),
+        // The sign-up/sign-in user flow or custom policy, e.g. B2C_1_signupsignin.
+        AZURE_B2C_POLICY: Joi.when('AZURE_B2C_DISCOVERY_URL', {
+          is: Joi.exist(),
+          then: Joi.string().min(1).optional(),
+          otherwise: Joi.string().min(1).required(),
+        }),
+        // Application (client) ID of this API's B2C app registration. It is
+        // the audience the access tokens are checked against.
+        AZURE_B2C_CLIENT_ID: Joi.string().min(1).required(),
+        // Extra accepted audiences, comma separated, for clients still on a
+        // previous app registration.
+        AZURE_B2C_AUDIENCE: Joi.string().optional(),
+        // Only for tenants whose iss claim cannot be read from discovery.
+        AZURE_B2C_ISSUER: Joi.string().uri().optional(),
+        // Scopes every request must carry, comma separated.
+        AZURE_B2C_REQUIRED_SCOPES: Joi.string().optional(),
+        AZURE_B2C_CLOCK_SKEW_SECONDS: Joi.number()
+          .integer()
+          .min(0)
+          .max(300)
+          .default(60),
+        AZURE_B2C_JWKS_CACHE_MS: Joi.number()
+          .integer()
+          .min(0)
+          .default(10 * 60 * 1000),
+        AZURE_B2C_DISCOVERY_CACHE_MS: Joi.number()
+          .integer()
+          .min(0)
+          .default(12 * 60 * 60 * 1000),
         // Embedding preview/backfill routes are administrative and must never be
         // exposed without a key in production.
         API_KEY: Joi.when('NODE_ENV', {
@@ -112,6 +161,8 @@ import { WhatsappAgentModule } from './modules/whatsapp-agent/whatsapp-agent.mod
         }),
       }),
     }),
+
+    AuthModule,
 
     HealthModule,
 
@@ -133,9 +184,17 @@ import { WhatsappAgentModule } from './modules/whatsapp-agent/whatsapp-agent.mod
     WhatsappAgentModule,
   ],
   providers: [
+    // Guard order follows this array: the environment block runs first, so a
+    // blocked environment never even reaches token verification.
     {
       provide: APP_GUARD,
       useClass: MainEnvBlockGuard,
+    },
+    // Authentication is global: every route needs an Azure AD B2C access
+    // token unless it is explicitly marked @Public().
+    {
+      provide: APP_GUARD,
+      useClass: AzureB2cAuthGuard,
     },
   ],
 })

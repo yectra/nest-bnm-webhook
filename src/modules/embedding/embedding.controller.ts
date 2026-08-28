@@ -1,5 +1,10 @@
 import { BadRequestException, Body, Controller, Post, UseGuards } from '@nestjs/common';
-import { ApiHeader, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiHeader,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 
 import { RequiredApiKeyGuard } from '../../common/guards/required-api-key.guard';
 import { CosmosService } from '../database/cosmos.service';
@@ -12,7 +17,10 @@ import { EmbeddingWriteService } from './embedding-write.service';
 import { EmbeddedDocumentService } from './embedded-document.service';
 
 @ApiTags('embeddings')
+@ApiBearerAuth()
 @ApiHeader({ name: 'x-api-key', required: true })
+// These routes are administrative: on top of the Azure AD B2C token every
+// route requires, they still need the operational API key.
 @UseGuards(RequiredApiKeyGuard)
 @Controller('embeddings')
 export class EmbeddingController {

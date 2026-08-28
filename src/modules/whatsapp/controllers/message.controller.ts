@@ -1,10 +1,11 @@
 import { Body, Controller, Post } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 import { SendMessageDto } from '../dto/send-message.dto';
 import { MessageService } from '../services/message.service';
 
 @ApiTags('Twilio')
+@ApiBearerAuth()
 @Controller('twilio')
 export class MessageController {
   constructor(private readonly messageService: MessageService) {}

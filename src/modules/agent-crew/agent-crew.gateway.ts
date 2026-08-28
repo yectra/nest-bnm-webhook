@@ -12,6 +12,7 @@ import { Server, Socket } from 'socket.io';
 import { AgentCrewService } from './agent-crew.service';
 import { CrewMessageDto } from './dto/crew-message.dto';
 import { WebsiteRealtimeService } from '../chatbot/services/website-realtime.service';
+import { WsAuthService } from '../auth/services/ws-auth.service';
 
 /**
  * WebSocket entry/exit point for the agent crew. Clients join a session room
@@ -36,6 +37,7 @@ export class AgentCrewGateway
     @Inject(forwardRef(() => AgentCrewService))
     private readonly agentCrewService: AgentCrewService,
     private readonly websiteRealtimeService: WebsiteRealtimeService,
+    private readonly wsAuth: WsAuthService,
   ) {}
 
   onModuleInit() {
@@ -68,8 +70,19 @@ export class AgentCrewGateway
     });
   }
 
-  handleConnection(client: Socket) {
-    this.logger.log(`Agent crew client connected: ${client.id}`);
+  /**
+   * The handshake carries the same Azure AD B2C access token the HTTP routes
+   * require; without a valid one the socket is closed straight away, so the
+   * gateway cannot be used to reach the crew around the global guard.
+   */
+  async handleConnection(client: Socket) {
+    const user = await this.wsAuth.authenticateOrDisconnect(client);
+
+    if (user) {
+      this.logger.log(
+        `Agent crew client connected: ${client.id} (userId=${user.userId})`,
+      );
+    }
   }
 
   handleDisconnect(client: Socket) {
@@ -93,12 +106,14 @@ export class AgentCrewGateway
     @ConnectedSocket() client: Socket,
     @MessageBody() dto: CrewMessageDto,
   ) {
+    const user = this.wsAuth.getUser(client);
     const conversationId =
       dto.conversationId || dto.sessionId || `session-${client.id}`;
     void client.join(conversationId);
     return this.agentCrewService.run({
       ...dto,
       conversationId,
+      userId: dto.userId || user?.userId,
       channel: dto.channel || 'Website',
     });
   }

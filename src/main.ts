@@ -5,6 +5,7 @@ import { urlencoded } from 'express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 import { AppModule } from './app.module';
+import { AZURE_B2C_SECURITY_SCHEME } from './common/constants';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -35,8 +36,25 @@ async function bootstrap() {
   if ((process.env.APP_ENV || 'main').toLowerCase() !== 'main') {
     const config = new DocumentBuilder()
       .setTitle('Company Backend')
-      .setDescription('Backend APIs')
+      .setDescription(
+        'Backend APIs. Every route requires an Azure AD B2C access token ' +
+          '(Authorization: Bearer <token>) except the health probe and the ' +
+          'third-party webhooks, which authenticate by their own means.',
+      )
       .setVersion('1.0')
+      .addBearerAuth(
+        {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+          description:
+            'Access token issued by the Azure AD B2C user flow for this API.',
+        },
+        AZURE_B2C_SECURITY_SCHEME,
+      )
+      // Makes the token the default for every operation in the UI; @Public()
+      // routes simply ignore it.
+      .addSecurityRequirements(AZURE_B2C_SECURITY_SCHEME)
       .build();
 
     const document = SwaggerModule.createDocument(app, config);

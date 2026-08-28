@@ -20,11 +20,15 @@ The API starts on `http://localhost:3000` by default.
 
 Useful endpoints:
 
-- `GET /api/health`
+- `GET /api/health` (open)
+- `GET /api/auth/me`
 - `POST /api/twilio/send-message`
-- `POST /api/webhook/whatsapp`
-- `POST /api/webhook/whatsapp/status`
+- `POST /api/webhook/whatsapp` (open, Twilio-signed)
+- `POST /api/webhook/whatsapp/status` (open, Twilio-signed)
 - `GET /docs`
+
+Every endpoint except the ones marked open requires an Azure AD B2C access
+token; see [Authentication](#authentication-azure-ad-b2c).
 
 ## Required environment variables
 
@@ -35,6 +39,9 @@ PORT=3000
 NODE_ENV=development
 APP_ENV=dev
 APP_BASE_URL=https://your-app-name.azurewebsites.net
+AZURE_B2C_TENANT_NAME=your_b2c_tenant_name
+AZURE_B2C_POLICY=B2C_1_signupsignin
+AZURE_B2C_CLIENT_ID=your_api_app_registration_client_id
 TWILIO_ACCOUNT_SID=your_account_sid
 TWILIO_AUTH_TOKEN=your_auth_token
 TWILIO_WHATSAPP_NUMBER=whatsapp:+14155238886
@@ -54,6 +61,9 @@ API_KEY=a-long-random-administrative-api-key
 
 Notes:
 
+- The three `AZURE_B2C_*` values are mandatory: without them the app does not
+  start, so it can never come up serving unauthenticated traffic. See
+  [Authentication](#authentication-azure-ad-b2c) for the optional settings.
 - `APP_ENV` names the deployment environment (`dev`, `stage`, or `main`)
   and defaults to `main` when not set. In `main`, every API call and public
   endpoint (including `/docs`) is blocked with a `403 Forbidden` exception,
@@ -64,13 +74,137 @@ Notes:
 - `EMBEDDING_MODEL` must be the Azure deployment name. `text-embedding-3-small`
   should use 1536 dimensions; all Cosmos vector containers must use the same value.
 
+## Authentication (Azure AD B2C)
+
+Every route is behind Azure AD B2C. Callers present the access token issued
+by the tenant's user flow:
+
+```http
+Authorization: Bearer <azure-ad-b2c-access-token>
+```
+
+Verification uses the certified [`openid-client`](https://github.com/panva/node-openid-client)
+OpenID Connect library together with `jose` — **not** MSAL. This app is a
+resource server: it never signs anyone in, holds no client secret, and stores
+no session. The front end obtains the token (with MSAL.js or any OIDC client
+it likes) and sends it here.
+
+### How a request is verified
+
+1. `openid-client` reads the user flow's OIDC discovery document, from the
+   URL derived from `AZURE_B2C_TENANT_NAME` and `AZURE_B2C_POLICY` (or from
+   `AZURE_B2C_DISCOVERY_URL`). This is what supplies the real `iss` value,
+   which contains the tenant GUID rather than the tenant name, and the JWKS
+   endpoint. The document is cached and refreshed in the background; a
+   discovery outage falls back to the cached copy rather than locking
+   everyone out.
+2. The token's signature is checked against the tenant's published keys,
+   restricted to `RS256`. Key rollovers need no restart and no redeploy.
+3. The claims must line up: `iss` equals the discovered issuer, `aud` equals
+   `AZURE_B2C_CLIENT_ID` (plus anything in `AZURE_B2C_AUDIENCE`), `exp`/`nbf`
+   are within `AZURE_B2C_CLOCK_SKEW_SECONDS`, and `tfp`/`acr` names the
+   configured user flow — so a token from another flow in the same tenant is
+   refused.
+4. ID tokens are rejected. B2C issues them for the same audience when one app
+   registration serves both roles, so the API only accepts access tokens.
+5. If `AZURE_B2C_REQUIRED_SCOPES` is set, the token must carry every scope
+   listed there.
+
+A failure is a `401` naming the reason (`Access token has expired`,
+`Token was issued by user flow "B2C_1_profileedit", not ...`, and so on).
+
+### What is protected
+
+The guard is registered globally, so **a route added tomorrow is protected
+without touching any auth code**. Only these endpoints are `@Public()`, and
+each one authenticates by a means of its own:
+
+| Endpoint | Why it is open |
+| --- | --- |
+| `GET /api/health` | Platform liveness probe; it cannot fetch a token, and a health check that depends on the IdP is not a health check. |
+| `POST /api/webhook/whatsapp` | Called by Twilio, which proves itself with the request signature. |
+| `POST /api/webhook/whatsapp/status` | Same — Twilio delivery receipts. |
+| `POST /api/webhook/event-grid` | Called by Azure Event Grid, which presents its own security key (`EventSecurityGuard`). |
+| `POST /api/messages` | Called by the Bot Framework service, which sends its own signed JWT that the adapter validates. |
+
+Everything else — chatbot, agent crew, semantic search, the WhatsApp deep
+agent, outbound Twilio sends and the embedding administration routes —
+requires a token. The embedding routes require the `x-api-key` header **as
+well**, so an operator token alone cannot run a backfill.
+
+The two Socket.IO gateways (`/api/chatbot` and `api/agent-crew`) are
+authenticated too — otherwise they would be a way around the HTTP guard. The
+handshake carries the same token, and an unauthenticated socket is closed
+immediately after an `unauthorized` event:
+
+```js
+const socket = io('https://your-app/api/agent-crew', {
+  auth: { token: accessToken },
+});
+socket.on('unauthorized', (e) => console.error(e.message));
+```
+
+An `Authorization` header or a `?token=` query parameter works too.
+
+### Reading the caller
+
+`@CurrentUser()` injects the verified user; `@CurrentUser('email')` injects
+one field:
+
+```ts
+@Get('quotes')
+list(@CurrentUser() user: AuthenticatedUser) {
+  return this.quotes.forUser(user.userId);
+}
+```
+
+`userId` is the token's `oid` (falling back to `sub`), alongside `email`,
+`emails`, `name`, `tenantId`, `policy`, `scopes`, `roles` and the full
+`claims` object. `GET /api/auth/me` returns exactly this, which is the
+quickest way to see what a user flow actually emits.
+
+Where a request body still carries a `userId` (the chatbot and agent-crew
+DTOs), that value continues to win, and the token's identity is the fallback;
+this keeps existing Cosmos records reachable. Point those clients at the
+token identity before relying on the body for authorization.
+
+Routes can narrow access further:
+
+```ts
+@Scopes('catalog.write')       // token must carry every listed scope -> 403
+@Roles('catalog.admin')        // token must carry at least one listed role -> 403
+```
+
+### Configuring the B2C tenant
+
+1. Register the API in the B2C tenant and expose a scope on it
+   (**App registrations → Expose an API → Add a scope**), for example
+   `api.access`.
+2. Grant the front-end registration permission to that scope
+   (**API permissions → My APIs**), then grant admin consent.
+3. Set `AZURE_B2C_CLIENT_ID` to the **API's** Application (client) ID and
+   `AZURE_B2C_POLICY` to the sign-up/sign-in user flow.
+4. Set `AZURE_B2C_REQUIRED_SCOPES=api.access` so a token minted for anything
+   else in the tenant is refused.
+5. Have the front end request that scope. A token requested with only
+   `openid` scopes is an ID token and will be rejected.
+
+To smoke-test a deployment:
+
+```bash
+curl https://your-app-name.azurewebsites.net/api/auth/me \
+  -H "Authorization: Bearer $ACCESS_TOKEN"
+```
+
+
 ## Embeddings and semantic search
 
-The embedding routes are protected by `x-api-key`; set `API_KEY` before using
-them. First verify the Azure deployment:
+The embedding routes need both an Azure AD B2C access token and `x-api-key`;
+set `API_KEY` before using them. First verify the Azure deployment:
 
 ```bash
 curl -X POST http://localhost:3000/api/embeddings/preview \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
   -H "x-api-key: $API_KEY" -H "content-type: application/json" \
   -d '{"text":"modular kitchen vendors in Chennai"}'
 ```
@@ -80,6 +214,7 @@ back-fill one catalog container at a time. Repeat until `embedded` is zero:
 
 ```bash
 curl -X POST http://localhost:3000/api/embeddings/backfill \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
   -H "x-api-key: $API_KEY" -H "content-type: application/json" \
   -d '{"container":"Service","limit":25}'
 ```
@@ -88,6 +223,7 @@ To create a new test catalog item and its embedding in one request, use:
 
 ```bash
 curl -X POST http://localhost:3000/api/embeddings/documents \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
   -H "x-api-key: $API_KEY" -H "content-type: application/json" \
   -d '{"container":"Service","document":{"id":"service-demo-001","name":"Modular kitchen installation","description":"Custom modular kitchens in Chennai","category":"Interior Design","location":"Chennai"}}'
 ```
@@ -100,6 +236,7 @@ Finally query the populated catalog:
 
 ```bash
 curl -X POST http://localhost:3000/api/search/semantic \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
   -H "content-type: application/json" \
   -d '{"query":"modular kitchen vendors in Chennai","containers":["Service"],"top":5}'
 ```
@@ -215,7 +352,9 @@ answer can skip PII filtering. Backbone prompts live in
 WebSocket usage (Socket.IO):
 
 ```js
-const socket = io('https://your-app/api/agent-crew');
+const socket = io('https://your-app/api/agent-crew', {
+  auth: { token: accessToken },
+});
 socket.emit('joinSession', { sessionId: 'conv-1' });
 socket.on('crewResponse', (payload) => console.log(payload));
 socket.emit('askCrew', { message: 'Find services matching the pictures on my quote', conversationId: 'conv-1', userId: 'user-789' });
@@ -265,6 +404,9 @@ az webapp config appsettings set \
   NODE_ENV=production \
   SCM_DO_BUILD_DURING_DEPLOYMENT=true \
   PORT=8080 \
+  AZURE_B2C_TENANT_NAME=<value> \
+  AZURE_B2C_POLICY=B2C_1_signupsignin \
+  AZURE_B2C_CLIENT_ID=<value> \
   APP_BASE_URL=https://<your-unique-app-name>.azurewebsites.net \
   TWILIO_ACCOUNT_SID=<value> \
   TWILIO_AUTH_TOKEN=<value> \
@@ -291,6 +433,9 @@ az webapp deploy \
 
 ## Runtime behavior
 
+- Every request other than the health probe and the third-party webhooks must
+  present an Azure AD B2C access token; see
+  [Authentication](#authentication-azure-ad-b2c).
 - Inbound WhatsApp messages hit `/api/webhook/whatsapp`.
 - The app validates the Twilio request signature.
 - It responds immediately with TwiML, so Twilio sends the auto-reply back to the user.
