@@ -12,7 +12,7 @@ import { EventSecurityGuard } from '../../common/guards/event-security.guard';
 import { AuthModule } from '../../auth/auth.module';
 
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, forwardRef(() => WhatsappAgentModule)],
   controllers: [WebhookController, MessageController],
 
   providers: [
