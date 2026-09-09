@@ -5,6 +5,10 @@ import { CallbackService } from '../services/callback.service';
 import { EventGridService } from '../services/event-grid.service';
 import { KeyVaultService } from '../../../common/services/key-vault.service';
 import { EventSecurityGuard } from '../../../common/guards/event-security.guard';
+import { EventGridAuthGuard } from '../../../auth/guards/event-grid-auth.guard';
+import { EntraIdStrategy } from '../../../auth/strategies/entra-id.strategy';
+import { EventGridEventValidator } from '../../../auth/events/event-grid-event.validator';
+import { ConfigService } from '@nestjs/config';
 
 describe('WebhookController', () => {
   let controller: WebhookController;
@@ -31,6 +35,18 @@ describe('WebhookController', () => {
       getEventSecurityKey: jest.fn().mockResolvedValue('test-key'),
     };
 
+    const mockEntraIdStrategy = {
+      validateToken: jest.fn().mockResolvedValue({
+        tid: 'tenant-id',
+        aud: 'audience',
+        roles: ['EventGrid.Deliver'],
+      }),
+    };
+
+    const mockConfigService = {
+      get: jest.fn().mockReturnValue(undefined),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       controllers: [WebhookController],
       providers: [
@@ -38,9 +54,14 @@ describe('WebhookController', () => {
         { provide: CallbackService, useValue: mockCallbackService },
         { provide: EventGridService, useValue: mockEventGridService },
         { provide: KeyVaultService, useValue: mockKeyVaultService },
+        { provide: EntraIdStrategy, useValue: mockEntraIdStrategy },
+        { provide: ConfigService, useValue: mockConfigService },
+        EventGridEventValidator,
+        EventGridAuthGuard,
         EventSecurityGuard,
       ],
     }).compile();
+
 
     controller = module.get<WebhookController>(WebhookController);
     eventGridService = module.get(EventGridService);

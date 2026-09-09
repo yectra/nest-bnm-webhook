@@ -21,8 +21,10 @@ import { EmbeddingModule } from './modules/embedding/embedding.module';
 import { SearchModule } from './modules/search/search.module';
 import { AgentCrewModule } from './modules/agent-crew/agent-crew.module';
 import { WhatsappAgentModule } from './modules/whatsapp-agent/whatsapp-agent.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
+
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
@@ -110,8 +112,17 @@ import { WhatsappAgentModule } from './modules/whatsapp-agent/whatsapp-agent.mod
           then: Joi.string().min(32).required(),
           otherwise: Joi.string().min(16).optional(),
         }),
+        // Azure Entra ID and Event Grid Webhook Authentication
+        AZURE_TENANT_ID: Joi.string().optional(),
+        AZURE_EVENT_GRID_AUDIENCE: Joi.string().optional(),
+        AZURE_EVENT_GRID_ALLOWED_APP_ID: Joi.string().optional(),
+        AZURE_EVENT_GRID_REQUIRED_ROLE: Joi.string().optional(),
+        AZURE_EVENT_GRID_TOPIC: Joi.string().optional(),
+        AZURE_EVENT_GRID_ALLOWED_EVENT_TYPES: Joi.string().optional(),
       }),
     }),
+
+    AuthModule,
 
     HealthModule,
 
@@ -132,6 +143,7 @@ import { WhatsappAgentModule } from './modules/whatsapp-agent/whatsapp-agent.mod
     AgentCrewModule,
     WhatsappAgentModule,
   ],
+
   providers: [
     {
       provide: APP_GUARD,

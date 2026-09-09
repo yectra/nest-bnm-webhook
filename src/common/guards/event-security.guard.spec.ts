@@ -1,4 +1,4 @@
-import { ExecutionContext } from '@nestjs/common';
+import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { EventSecurityGuard } from './event-security.guard';
 import { KeyVaultService } from '../services/key-vault.service';
 
@@ -28,7 +28,7 @@ describe('EventSecurityGuard', () => {
     guard = new EventSecurityGuard(keyVaultService);
   });
 
-  describe('Bypassed Signature Validation Scenarios', () => {
+  describe('Valid Key Scenarios', () => {
     it('should allow request when valid key is in x-security-key header', async () => {
       const context = createMockContext({ 'x-security-key': SECRET_KEY });
       const result = await guard.canActivate(context);
@@ -81,11 +81,38 @@ describe('EventSecurityGuard', () => {
       const result = await guard.canActivate(context);
       expect(result).toBe(true);
     });
+  });
 
-    it('should allow request even when no security key is provided (bypass mode)', async () => {
+  describe('Invalid Key Scenarios', () => {
+    it('should reject request when header key is invalid', async () => {
+      const context = createMockContext({ 'x-security-key': 'wrong-key-value' });
+      await expect(guard.canActivate(context)).rejects.toThrow(
+        new UnauthorizedException('Invalid signature'),
+      );
+    });
+
+    it('should reject request when payload signature is invalid', async () => {
+      const context = createMockContext({}, { signature: 'wrong-signature' });
+      await expect(guard.canActivate(context)).rejects.toThrow(
+        new UnauthorizedException('Invalid signature'),
+      );
+    });
+  });
+
+  describe('Missing Key Scenarios', () => {
+    it('should reject request when no security key is provided', async () => {
       const context = createMockContext({}, {});
-      const result = await guard.canActivate(context);
-      expect(result).toBe(true);
+      await expect(guard.canActivate(context)).rejects.toThrow(
+        new UnauthorizedException('Invalid signature'),
+      );
+    });
+
+    it('should reject request when expected key from Key Vault is null', async () => {
+      keyVaultService.getEventSecurityKey.mockResolvedValueOnce(null);
+      const context = createMockContext({ 'x-security-key': SECRET_KEY });
+      await expect(guard.canActivate(context)).rejects.toThrow(
+        new UnauthorizedException('Invalid signature'),
+      );
     });
   });
 });

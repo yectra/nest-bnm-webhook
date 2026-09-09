@@ -26,7 +26,27 @@ export class EventSecurityGuard implements CanActivate {
       return true;
     }
 
-    // Signature validation temporarily disabled per user request
+    const incomingKey = this.extractSecurityKey(request);
+
+    if (!incomingKey) {
+      this.logger.warn('Event security validation failed: Missing security key');
+      throw new UnauthorizedException('Invalid signature');
+    }
+
+    const expectedKey = await this.keyVaultService.getEventSecurityKey();
+
+    if (!expectedKey) {
+      this.logger.warn('Event security validation failed: Expected key not configured or unavailable');
+      throw new UnauthorizedException('Invalid signature');
+    }
+
+    const isValid = CryptoUtil.compareStringSecure(incomingKey, expectedKey);
+
+    if (!isValid) {
+      this.logger.warn('Event security validation failed: Security key mismatch');
+      throw new UnauthorizedException('Invalid signature');
+    }
+
     return true;
   }
 
