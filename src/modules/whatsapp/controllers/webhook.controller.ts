@@ -5,7 +5,7 @@ import { ApiTags } from '@nestjs/swagger';
 import { WebhookService } from '../services/webhook.service';
 import { CallbackService } from '../services/callback.service';
 import { EventGridService } from '../services/event-grid.service';
-import { EventSecurityGuard } from '../../../common/guards/event-security.guard';
+import { EventGridAuthGuard } from '../../../auth/guards/event-grid-auth.guard';
 import { Public } from '../../../common/decorators/public.decorator';
 
 @ApiTags('Webhook')
@@ -35,8 +35,9 @@ export class WebhookController {
 
   @Public()
   @Post('event-grid')
-  @UseGuards(EventSecurityGuard)
+  @UseGuards(EventGridAuthGuard)
   receiveEventGridEvent(@Body() body: any) {
     return this.eventGridService.processEvent(body);
   }
 }
+
