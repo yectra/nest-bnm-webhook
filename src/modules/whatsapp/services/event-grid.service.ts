@@ -1,5 +1,7 @@
-import { Injectable, Logger, Optional } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { PostYourRequirementsAgentService } from '../../whatsapp-agent/services/post-your-requirements-agent.service';
+import { RequestAQuoteAgentService } from '../../whatsapp-agent/services/request-a-quote-agent.service';
 
 export interface EventGridEvent<T = any> {
   id?: string;
@@ -27,11 +29,14 @@ export class EventGridService {
 
   constructor(
     private readonly configService: ConfigService,
-    @Optional()
-    private readonly postYourRequirementsAgentService?: any,
+    @Inject(forwardRef(() => PostYourRequirementsAgentService))
+    private readonly postYourRequirementsAgentService: PostYourRequirementsAgentService,
+    @Inject(forwardRef(() => RequestAQuoteAgentService))
+    private readonly requestAQuoteAgentService: RequestAQuoteAgentService,
   ) {}
 
   async processEvent(payload: EventGridEvent | EventGridEvent[]) {
+    console.log(payload,'This is first line within processing event printing payload')
     const events = Array.isArray(payload) ? payload : [payload];
     const results: any[] = [];
 
@@ -54,18 +59,34 @@ export class EventGridService {
       const typeName = event?.eventType || event?.eventName || 'UNKNOWN_EVENT';
 
       // Log captured event details for EVERY incoming event
+      console.log(event,`This is second line within request a quote agent printing event ${event?.eventType}`)
       this.logCapturedEvent(event);
 
       // Handle Post Your Requirements Agent service integration if present
       if (
-        typeName === 'POST_YOUR_REQUIREMENTS' &&
+        (typeName === 'POST_YOUR_REQUIREMENT' || typeName === 'POST_YOUR_REQUIREMENTS') &&
         this.postYourRequirementsAgentService?.processEvent
       ) {
         const agentReply = await this.postYourRequirementsAgentService.processEvent(event);
         results.push({
           status: 'success',
           eventId: event?.id || event?.eventId || 'N/A',
-          eventType: typeName,
+          eventType: event?.eventType,
+          agentReply,
+        });
+        continue;
+      }
+
+      // Handle Request a Quote Agent service integration if present
+      if (
+        typeName === 'QUOTE_CREATED_EVENT' &&
+        this.requestAQuoteAgentService?.processEvent
+      ) {
+        const agentReply = await this.requestAQuoteAgentService.processEvent(event);
+        results.push({
+          status: 'success',
+          eventId: event?.id || event?.eventId || 'N/A',
+          eventType: event?.eventType,
           agentReply,
         });
         continue;
@@ -74,7 +95,7 @@ export class EventGridService {
       results.push({
         status: 'success',
         eventId: event?.id || event?.eventId || 'N/A',
-        eventType: typeName,
+        eventType: event?.eventType,
       });
     }
 

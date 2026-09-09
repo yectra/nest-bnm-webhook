@@ -1,5 +1,6 @@
 import { ConfigService } from '@nestjs/config';
 import { EventGridService } from './event-grid.service';
+import { PostYourRequirementsAgentService } from '../../whatsapp-agent/services/post-your-requirements-agent.service';
 
 describe('EventGridService', () => {
   let service: EventGridService;

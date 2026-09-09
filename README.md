@@ -138,6 +138,46 @@ consumer that answers inbound WhatsApp messages
 (`BNM_WHATSAPP_RECEIVED_FROM_JAVA_EVENT`), the grounded support agent, the
 adversarial-input guard, and the PII output filter.
 
+### LangSmith tracing
+
+Every hello-agent turn (the agent graph, its model calls and any tool calls)
+can be traced to [LangSmith](https://docs.langchain.com/langsmith/home):
+
+```env
+LANGSMITH_API_KEY=your-langsmith-key
+LANGSMITH_PROJECT=bnm-hello-agent
+# Self-hosted or EU deployments only.
+LANGSMITH_ENDPOINT=https://api.smith.langchain.com
+# Kill switch: keeps the key but stops tracing.
+LANGSMITH_TRACING=true
+# Upload each run's trace before the reply returns (default: false).
+LANGSMITH_FLUSH_AFTER_RUN=false
+```
+
+`LANGSMITH_API_KEY` is the only switch that turns tracing on. **Without the
+key no trace is sent** — no LangSmith client is created and the agent runs
+exactly as it did before. Notes:
+
+- The tracer is attached per invocation as a callback rather than enabled
+  globally, so only the hello agent is reported, not every LangChain call in
+  the app.
+- Runs appear in `LANGSMITH_PROJECT` (default `bnm-hello-agent`) under the
+  run name `hello-agent`, tagged `hello-agent` / `whatsapp-agent`, with the
+  model name and message length in the run metadata.
+- Tracing is best-effort: a LangSmith outage or a bad key never fails the
+  request, and traces are batched off the request path.
+- Traces are flushed on shutdown (`app.enableShutdownHooks()`), so pending
+  batches still reach LangSmith when the platform sends `SIGTERM`.
+- `LANGSMITH_FLUSH_AFTER_RUN=true` uploads each run's trace (the agent graph
+  and every model and tool call inside it) before the reply returns, instead
+  of leaving it to the background batch. That puts one LangSmith round trip
+  on the request path, so it is off by default; turn it on where the process
+  may not outlive the batch queue — scale-to-zero or short-lived hosts, or
+  when debugging and you want the trace visible immediately. Failed turns are
+  flushed too, and a failed upload is logged without affecting the reply.
+- The prompt and the reply are part of a trace, so treat the LangSmith
+  project as holding the same data as the conversation itself.
+
 ## LangGraph agent crew
 
 `POST /api/agent-crew/chat` (and the Socket.IO namespace `api/agent-crew`)
