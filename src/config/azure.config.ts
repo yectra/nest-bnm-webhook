@@ -13,4 +13,12 @@ export default registerAs('azure', () => ({
     process.env.KEY_VAULT_SECRET_NAME ||
     'event-capture-security-key',
   eventSecurityKey: process.env.EVENT_SECURITY_KEY,
+  // Azure Entra ID and Event Grid Webhook Authentication
+  tenantId: process.env.AZURE_TENANT_ID,
+  eventGridAudience: process.env.AZURE_EVENT_GRID_AUDIENCE,
+  eventGridAllowedAppId: process.env.AZURE_EVENT_GRID_ALLOWED_APP_ID,
+  eventGridRequiredRole: process.env.AZURE_EVENT_GRID_REQUIRED_ROLE,
+  eventGridTopic: process.env.AZURE_EVENT_GRID_TOPIC,
+  eventGridAllowedEventTypes: process.env.AZURE_EVENT_GRID_ALLOWED_EVENT_TYPES,
 }));
+

@@ -59,6 +59,7 @@ export class EventGridService {
       const typeName = event?.eventType || event?.eventName || 'UNKNOWN_EVENT';
 
       // Log captured event details for EVERY incoming event
+      console.log(event,`This is second line within request a quote agent printing event ${event?.eventType}`)
       this.logCapturedEvent(event);
 
       // Handle Post Your Requirements Agent service integration if present

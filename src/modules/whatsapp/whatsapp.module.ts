@@ -9,10 +9,12 @@ import { EventGridService } from './services/event-grid.service';
 import { WhatsappAgentModule } from '../whatsapp-agent/whatsapp-agent.module';
 import { KeyVaultService } from '../../common/services/key-vault.service';
 import { EventSecurityGuard } from '../../common/guards/event-security.guard';
+import { AuthModule } from '../../auth/auth.module';
 
 @Module({
-  imports: [forwardRef(() => WhatsappAgentModule)],
+  imports: [AuthModule],
   controllers: [WebhookController, MessageController],
+
   providers: [
     TwilioService,
     MessageService,
