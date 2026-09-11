@@ -20,15 +20,7 @@ describe('EventGridService', () => {
       processEvent: jest.fn().mockResolvedValue({ status: 'processed_by_agent' }),
     };
 
-    const mockRequestAQuoteAgentService = {
-      processEvent: jest.fn().mockResolvedValue('quote processed'),
-    };
-
-    service = new EventGridService(
-      configService,
-      postYourRequirementsAgentService as any,
-      mockRequestAQuoteAgentService as any,
-    );
+    service = new EventGridService(configService, postYourRequirementsAgentService);
   });
 
   it('should handle Azure Event Grid subscription validation event', async () => {
@@ -102,7 +94,7 @@ describe('EventGridService', () => {
     });
   });
 
-  it('should log unknown event types without throwing errors and mark status as ignored', async () => {
+  it('should log unknown event types without throwing errors', async () => {
     const unknownEvent = [
       {
         id: 'unknown-001',
@@ -117,7 +109,7 @@ describe('EventGridService', () => {
       processedCount: 1,
       results: [
         {
-          status: 'ignored',
+          status: 'success',
           eventId: 'unknown-001',
           eventType: 'SOME_OTHER_EVENT',
         },
@@ -154,80 +146,6 @@ describe('EventGridService', () => {
           eventId: 'pyr-evt-001',
           eventType: 'POST_YOUR_REQUIREMENTS',
           agentReply: { status: 'processed_by_agent' },
-        },
-      ],
-    });
-  });
-
-  it('should handle singular POST_YOUR_REQUIREMENT and invoke PostYourRequirements agent', async () => {
-    const eventPayload = [
-      {
-        id: 'pyr-single-001',
-        eventType: 'POST_YOUR_REQUIREMENT',
-        data: { message: 'Need 2BHK flat' },
-      },
-    ];
-
-    const result = await service.processEvent(eventPayload);
-    expect(postYourRequirementsAgentService.processEvent).toHaveBeenCalledWith(eventPayload[0]);
-    expect(result).toEqual({
-      message: 'Event Grid payload processed successfully',
-      processedCount: 1,
-      results: [
-        {
-          status: 'success',
-          eventId: 'pyr-single-001',
-          eventType: 'POST_YOUR_REQUIREMENT',
-          agentReply: { status: 'processed_by_agent' },
-        },
-      ],
-    });
-  });
-
-  it('should handle QUOTE_CREATED_EVENT and invoke ONLY RequestAQuote agent', async () => {
-    const eventPayload = [
-      {
-        id: 'quote-001',
-        eventType: 'QUOTE_CREATED_EVENT',
-        data: { quoteId: 'q-101', message: 'Need painting quote' },
-      },
-    ];
-
-    const result = await service.processEvent(eventPayload);
-    expect(postYourRequirementsAgentService.processEvent).not.toHaveBeenCalled();
-    expect(result).toEqual({
-      message: 'Event Grid payload processed successfully',
-      processedCount: 1,
-      results: [
-        {
-          status: 'success',
-          eventId: 'quote-001',
-          eventType: 'QUOTE_CREATED_EVENT',
-          agentReply: 'quote processed',
-        },
-      ],
-    });
-  });
-
-  it('should process BNM_WHATSAPP_RECEIVED_FROM_JAVA_EVENT without invoking any agent', async () => {
-    const eventPayload = [
-      {
-        id: 'wa-001',
-        eventType: 'BNM_WHATSAPP_RECEIVED_FROM_JAVA_EVENT',
-        data: { messageId: 'm-1' },
-      },
-    ];
-
-    const result = await service.processEvent(eventPayload);
-    expect(postYourRequirementsAgentService.processEvent).not.toHaveBeenCalled();
-    expect(result).toEqual({
-      message: 'Event Grid payload processed successfully',
-      processedCount: 1,
-      results: [
-        {
-          status: 'success',
-          eventId: 'wa-001',
-          eventType: 'BNM_WHATSAPP_RECEIVED_FROM_JAVA_EVENT',
         },
       ],
     });

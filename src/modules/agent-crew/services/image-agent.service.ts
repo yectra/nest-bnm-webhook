@@ -65,7 +65,7 @@ export class ImageAgentService implements CrewAgentDefinition {
     this.isEnabled = flag === true || flag === 'true';
     this.imageModel =
       config.get<string>('OPENAI_IMAGE_MODEL') ??
-      'gpt-5-mini';
+      'gpt-5-nano';
   }
 
   /** Picture analysis is opt-in: off unless AGENT_CREW_IMAGE_AGENT_ENABLED=true. */
