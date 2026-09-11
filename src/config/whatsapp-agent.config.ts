@@ -24,7 +24,7 @@ export default registerAs('whatsappAgent', () => ({
     baseUrl: process.env.WHATSAPP_AGENT_LLM_BASE_URL || undefined,
     apiKey: process.env.WHATSAPP_AGENT_LLM_API_KEY || undefined,
     /** Frontier models are never required. */
-    model: process.env.WHATSAPP_AGENT_LLM_MODEL || 'gpt-5-mini',
+    model: process.env.WHATSAPP_AGENT_LLM_MODEL || 'phi-4-mini-instruct',
   },
   langsmith: {
     /**

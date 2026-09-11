@@ -12,18 +12,12 @@ export class CrewLlmProvider {
   private readonly logger = new Logger(CrewLlmProvider.name);
   private readonly client: OpenAI;
   private readonly model: string;
-  private readonly moderationModel: string;
 
   constructor(config: ConfigService) {
     this.model =
       config.get<string>('AGENT_CREW_MODEL') ??
       config.get<string>('OPENAI_MODEL') ??
       'gpt-5.1';
-    this.moderationModel =
-      config.get<string>('OPENAI_MODERATION_MODEL') ??
-      config.get<string>('OPENAI_MODERATION_DEPLOYMENT') ??
-      config.get<string>('OPENAI_IMAGE_MODEL') ??
-      'gpt-5-mini';
     const timeout = config.get<number>('OPENAI_TIMEOUT_MS') ?? 30000;
 
     this.client = new OpenAI({
@@ -38,17 +32,9 @@ export class CrewLlmProvider {
     return this.model;
   }
 
-  getModerationModelName(): string {
-    return this.moderationModel;
-  }
-
-  async complete(
-    systemPrompt: string,
-    userPrompt: string,
-    modelOverride?: string,
-  ): Promise<string> {
+  async complete(systemPrompt: string, userPrompt: string): Promise<string> {
     const response = await this.client.chat.completions.create({
-      model: modelOverride ?? this.model,
+      model: this.model,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },
@@ -61,11 +47,10 @@ export class CrewLlmProvider {
   async completeJson<T>(
     systemPrompt: string,
     userPrompt: string,
-    modelOverride?: string,
   ): Promise<T | null> {
     try {
       const response = await this.client.chat.completions.create({
-        model: modelOverride ?? this.model,
+        model: this.model,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
@@ -78,7 +63,7 @@ export class CrewLlmProvider {
       }
       return JSON.parse(raw) as T;
     } catch (error) {
-      this.logger.warn('JSON completion failed', error);
+      this.logger.warn('GPT-5 JSON completion failed', error);
       return null;
     }
   }

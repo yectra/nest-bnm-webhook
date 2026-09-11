@@ -58,9 +58,6 @@ import { AuthModule } from './auth/auth.module';
         OPENAI_BASE_URL: Joi.string().uri().required(),
         OPENAI_API_KEY: Joi.string().min(1).required(),
         OPENAI_MODEL: Joi.string().min(1).required(),
-        OPENAI_IMAGE_MODEL: Joi.string().optional(),
-        OPENAI_MODERATION_MODEL: Joi.string().optional(),
-        OPENAI_MODERATION_DEPLOYMENT: Joi.string().optional(),
         // This must be the Azure deployment name, not just the base model name.
         EMBEDDING_MODEL: Joi.string().min(1).required(),
         EMBEDDING_DIMENSIONS: Joi.number()

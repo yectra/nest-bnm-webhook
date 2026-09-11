@@ -10,14 +10,9 @@ import { WhatsappAgentModule } from '../whatsapp-agent/whatsapp-agent.module';
 import { KeyVaultService } from '../../common/services/key-vault.service';
 import { EventSecurityGuard } from '../../common/guards/event-security.guard';
 import { AuthModule } from '../../auth/auth.module';
-import { LeadValidatorModule } from '../agent-crew/lead-validator/lead-validator.module';
 
 @Module({
-  imports: [
-    AuthModule,
-    forwardRef(() => WhatsappAgentModule),
-    LeadValidatorModule,
-  ],
+  imports: [AuthModule, forwardRef(() => WhatsappAgentModule)],
   controllers: [WebhookController, MessageController],
 
   providers: [

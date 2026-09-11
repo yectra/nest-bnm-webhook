@@ -23,9 +23,7 @@ export class EventGridEventValidator {
   // Default recognized event types in the project
   private static readonly DEFAULT_ALLOWED_EVENT_TYPES = [
     'BNM_WHATSAPP_RECEIVED_FROM_JAVA_EVENT',
-    'POST_YOUR_REQUIREMENT',
     'POST_YOUR_REQUIREMENTS',
-    'QUOTE_CREATED_EVENT',
     'Microsoft.EventGrid.SubscriptionValidationEvent',
   ];
 
@@ -119,13 +117,10 @@ export class EventGridEventValidator {
         }
       }
 
-      if (
-        eventType === 'POST_YOUR_REQUIREMENTS' ||
-        eventType === 'POST_YOUR_REQUIREMENT'
-      ) {
+      if (eventType === 'POST_YOUR_REQUIREMENTS') {
         if (Object.keys(data).length === 0) {
-          this.logger.warn(`${eventType} event contains empty data payload`);
-          throw new BadRequestException(`Invalid ${eventType} event: data object cannot be empty`);
+          this.logger.warn('POST_YOUR_REQUIREMENTS event contains empty data payload');
+          throw new BadRequestException('Invalid POST_YOUR_REQUIREMENTS event: data object cannot be empty');
         }
       }
     }
