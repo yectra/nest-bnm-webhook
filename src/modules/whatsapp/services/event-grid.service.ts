@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger, Optional, forwardRef } from '@nestjs/common
 import { ConfigService } from '@nestjs/config';
 import { PostYourRequirementsAgentService } from '../../whatsapp-agent/services/post-your-requirements-agent.service';
 import { RequestAQuoteAgentService } from '../../whatsapp-agent/services/request-a-quote-agent.service';
+import { LeadValidatorService } from '../../agent-crew/lead-validator/lead-validator.service';
 
 export interface EventGridEvent<T = any> {
   id?: string;
@@ -29,80 +30,102 @@ export class EventGridService {
 
   constructor(
     private readonly configService: ConfigService,
+    @Optional()
     @Inject(forwardRef(() => PostYourRequirementsAgentService))
-    private readonly postYourRequirementsAgentService: PostYourRequirementsAgentService,
+    private readonly postYourRequirementsAgentService?: PostYourRequirementsAgentService,
+    @Optional()
     @Inject(forwardRef(() => RequestAQuoteAgentService))
-    private readonly requestAQuoteAgentService: RequestAQuoteAgentService,
+    private readonly requestAQuoteAgentService?: RequestAQuoteAgentService,
+    @Optional() private readonly leadValidatorService?: LeadValidatorService,
   ) {}
 
   async processEvent(payload: EventGridEvent | EventGridEvent[]) {
-    console.log(payload,'This is first line within processing event printing payload')
     const events = Array.isArray(payload) ? payload : [payload];
     const results: any[] = [];
 
     for (const event of events) {
-      // Handle Azure Event Grid Subscription Validation Handshake
-      if (
-        event?.eventType === 'Microsoft.EventGrid.SubscriptionValidationEvent'
-      ) {
-        const validationData = (event.data || event.payload) as SubscriptionValidationData;
-        const validationCode = validationData?.validationCode;
+      const eventType = event?.eventType || event?.eventName || 'UNKNOWN_EVENT';
+      const eventId = event?.id || event?.eventId || 'N/A';
 
-        this.logger.log(
-          `[Azure Event Grid] Subscription validation handshake received. Code: ${validationCode}`,
-        );
 
-        results.push({ validationResponse: validationCode });
-        continue;
+      switch (eventType) {
+        case 'Microsoft.EventGrid.SubscriptionValidationEvent': {
+          // Handshake logic ONLY
+          return this.handleSubscriptionValidation(event);
+        }
+
+        case 'POST_YOUR_REQUIREMENT':
+        case 'POST_YOUR_REQUIREMENTS': {
+          // 1. Fire-and-forget Lead Validator specifically for requirement leads
+          this.triggerLeadValidator(event);
+
+          // 2. Execute ONLY PostYourRequirementsAgentService
+          if (this.postYourRequirementsAgentService?.processEvent) {
+            const agentReply = await this.postYourRequirementsAgentService.processEvent(event);
+            results.push({
+              status: 'success',
+              eventId,
+              eventType,
+              agentReply,
+            });
+          } else {
+            results.push({
+              status: 'success',
+              eventId,
+              eventType,
+            });
+          }
+          break;
+        }
+
+        case 'QUOTE_CREATED_EVENT': {
+          // 1. Fire-and-forget Lead Validator specifically for quotes
+          this.triggerLeadValidator(event);
+
+          // 2. Execute ONLY RequestAQuoteAgentService
+          if (this.requestAQuoteAgentService?.processEvent) {
+            const agentReply = await this.requestAQuoteAgentService.processEvent(event);
+            results.push({
+              status: 'success',
+              eventId,
+              eventType,
+              agentReply,
+            });
+          } else {
+            results.push({
+              status: 'success',
+              eventId,
+              eventType,
+            });
+          }
+          break;
+        }
+
+        case 'BNM_WHATSAPP_RECEIVED_FROM_JAVA_EVENT': {
+          // Trigger Lead Validator for incoming requirement data from Java backend
+          this.triggerLeadValidator(event);
+
+          // Handle ONLY WhatsApp event logic here.
+          // DO NOT invoke RequestAQuoteAgent or PostYourRequirementsAgent!
+          this.logger.log(`Processing WhatsApp event: ${eventId}`);
+          results.push({
+            status: 'success',
+            eventId,
+            eventType,
+          });
+          break;
+        }
+
+        default: {
+          this.logger.warn(`No dedicated handler registered for eventType: ${eventType}`);
+          results.push({
+            status: 'ignored',
+            eventId,
+            eventType,
+          });
+          break;
+        }
       }
-
-      const typeName = event?.eventType || event?.eventName || 'UNKNOWN_EVENT';
-
-      // Log captured event details for EVERY incoming event
-      console.log(event,`This is second line within request a quote agent printing event ${event?.eventType}`)
-      this.logCapturedEvent(event);
-
-      // Handle Post Your Requirements Agent service integration if present
-      if (
-        (typeName === 'POST_YOUR_REQUIREMENT' || typeName === 'POST_YOUR_REQUIREMENTS') &&
-        this.postYourRequirementsAgentService?.processEvent
-      ) {
-        const agentReply = await this.postYourRequirementsAgentService.processEvent(event);
-        results.push({
-          status: 'success',
-          eventId: event?.id || event?.eventId || 'N/A',
-          eventType: event?.eventType,
-          agentReply,
-        });
-        continue;
-      }
-
-      // Handle Request a Quote Agent service integration if present
-      if (
-        typeName === 'QUOTE_CREATED_EVENT' &&
-        this.requestAQuoteAgentService?.processEvent
-      ) {
-        const agentReply = await this.requestAQuoteAgentService.processEvent(event);
-        results.push({
-          status: 'success',
-          eventId: event?.id || event?.eventId || 'N/A',
-          eventType: event?.eventType,
-          agentReply,
-        });
-        continue;
-      }
-
-      results.push({
-        status: 'success',
-        eventId: event?.id || event?.eventId || 'N/A',
-        eventType: event?.eventType,
-      });
-    }
-
-    // Return validation response for subscription handshake if present
-    const validationResult = results.find((r) => r.validationResponse);
-    if (validationResult) {
-      return validationResult;
     }
 
     return {
@@ -112,42 +135,67 @@ export class EventGridService {
     };
   }
 
-  private logCapturedEvent(event: EventGridEvent) {
-    const appEnv =
-      this.configService.get<string>('app.appEnv') ||
-      process.env.APP_ENV ||
-      'main';
-    const nodeEnv =
-      this.configService.get<string>('NODE_ENV') ||
-      process.env.NODE_ENV ||
-      'development';
-
-    const nestAppDetails = {
-      appName: 'BNM Webhook Backend (NestJS)',
-      environment: {
-        appEnv,
-        nodeEnv,
-      },
-      processId: process.pid,
-      serverTimestamp: new Date().toISOString(),
-      handler: 'EventGridService.processEvent',
-    };
-
-    const eventDetails = {
-      eventName: event.eventType || event.eventName || 'N/A',
-      eventId: event.id || event.eventId || 'N/A',
-      eventTimestamp: event.eventTime || event.eventTimestamp || 'N/A',
-      subject: event.subject || event.topic || 'N/A',
-      payload: event.payload ?? event.data ?? {},
-    };
+  private handleSubscriptionValidation(event: EventGridEvent): { validationResponse: string } {
+    const validationData = (event.data || event.payload) as SubscriptionValidationData;
+    const validationCode = validationData?.validationCode;
 
     this.logger.log(
-      `==================== AZURE EVENT GRID EVENT CAPTURED ====================\n` +
-        `--- NestJS Application Details ---\n` +
-        JSON.stringify(nestAppDetails, null, 2) +
-        `\n--- Captured Event Details ---\n` +
-        JSON.stringify(eventDetails, null, 2) +
-        `\n========================================================================`,
+      `[Azure Event Grid] Subscription validation handshake received. Code: ${validationCode}`,
     );
+
+    return { validationResponse: validationCode };
+  }
+
+  private triggerLeadValidator(event: EventGridEvent): void {
+    if (!this.leadValidatorService) return;
+
+    const data = (event?.data || event?.payload || {}) as Record<string, any>;
+
+    // 1. Correct Text Extraction
+    const userText =
+      data.textMessage ||
+      data.message ||
+      data.description ||
+      '';
+
+    // 2. Correct Category Extraction
+    const rawCategory =
+      data.servicesCategory?.categoryName ||
+      data.category;
+
+    const declaredCategory =
+      typeof rawCategory === 'string' && rawCategory.trim().length > 0
+        ? rawCategory.trim()
+        : data.askExpert && data.askExpert !== 'Brick N Mortar'
+          ? data.askExpert
+          : 'Unspecified';
+
+    // 3. Media Extraction
+    const rawMedia = Array.isArray(data.attachments)
+      ? data.attachments
+      : Array.isArray(data.mediaUrls)
+        ? data.mediaUrls
+        : [];
+    const mediaUrls = rawMedia
+      .map((item: any) => (typeof item === 'string' ? item : item?.url || ''))
+      .filter(Boolean);
+
+    const ticketId = data.id || data.ticketId || data.quoteId || event?.id || event?.eventId || 'N/A';
+    const eventType = event?.eventType || event?.eventName || 'POST_YOUR_REQUIREMENTS';
+
+    const validator = this.leadValidatorService;
+    Promise.resolve()
+      .then(() =>
+        validator.validateLead({
+          ticketId,
+          eventType,
+          userText,
+          mediaUrls,
+          declaredCategory,
+        }),
+      )
+      .catch((err) => {
+        this.logger.error(`Validation error: ${err.message}`);
+      });
   }
 }

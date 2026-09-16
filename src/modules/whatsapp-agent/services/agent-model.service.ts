@@ -5,7 +5,7 @@ import type { BaseChatModel } from '@langchain/core/language_models/chat_models'
 
 /**
  * Builds the chat model for the deep agent, pointed at a low-cost
- * OpenAI-compatible endpoint (default model: phi-4-mini-instruct). Returns
+ * OpenAI-compatible endpoint (default model: gpt-5-mini). Returns
  * undefined when no endpoint is configured — callers must degrade
  * gracefully, never crash.
  */
@@ -24,7 +24,7 @@ export class AgentModelService {
     return new ChatOpenAI({
       model:
         this.configService.get<string>('whatsappAgent.llm.model') ||
-        'phi-4-mini-instruct',
+        'gpt-5-mini',
       apiKey:
         this.configService.get<string>('whatsappAgent.llm.apiKey') ||
         'not-required',
