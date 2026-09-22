@@ -29,10 +29,14 @@ describe('EvaluatorNode', () => {
       };
 
       const result = await evaluator.run(state);
-      expect(result.finalReport?.status).toBe('APPROVED');
+      expect(result.finalReport?.status).toBe('MATCHED');
+      expect(result.finalReport?.legacyStatus).toBe('APPROVED');
+      expect(result.finalReport?.recommended_action).toBe('ROUTE_TO_SERVICE');
+      expect(result.finalReport?.confidence_score).toBeGreaterThan(0.8);
+      expect(result.finalReport?.matched_services.length).toBeGreaterThan(0);
       expect(result.finalReport?.flags).toHaveLength(0);
       expect(
-        result.finalReport?.flags.some((f) => f.includes('CATEGORY_MISMATCH')),
+        result.finalReport?.flags?.some((f) => f.includes('CATEGORY_MISMATCH')),
       ).toBe(false);
     });
 
@@ -56,10 +60,12 @@ describe('EvaluatorNode', () => {
       };
 
       const result = await evaluator.run(state);
-      expect(result.finalReport?.status).toBe('APPROVED');
+      expect(result.finalReport?.status).toBe('MATCHED');
+      expect(result.finalReport?.legacyStatus).toBe('APPROVED');
+      expect(result.finalReport?.recommended_action).toBe('ROUTE_TO_SERVICE');
       expect(result.finalReport?.flags).toHaveLength(0);
       expect(
-        result.finalReport?.flags.some((f) => f.includes('CATEGORY_MISMATCH')),
+        result.finalReport?.flags?.some((f) => f.includes('CATEGORY_MISMATCH')),
       ).toBe(false);
     });
 
@@ -83,9 +89,10 @@ describe('EvaluatorNode', () => {
       };
 
       const resultBnm = await evaluator.run(stateBnm);
-      expect(resultBnm.finalReport?.status).toBe('APPROVED');
+      expect(resultBnm.finalReport?.status).toBe('MATCHED');
+      expect(resultBnm.finalReport?.legacyStatus).toBe('APPROVED');
       expect(
-        resultBnm.finalReport?.flags.some((f) => f.includes('CATEGORY_MISMATCH')),
+        resultBnm.finalReport?.flags?.some((f) => f.includes('CATEGORY_MISMATCH')),
       ).toBe(false);
 
       const stateEmpty: LeadValidatorState = {
@@ -107,9 +114,10 @@ describe('EvaluatorNode', () => {
       };
 
       const resultEmpty = await evaluator.run(stateEmpty);
-      expect(resultEmpty.finalReport?.status).toBe('APPROVED');
+      expect(resultEmpty.finalReport?.status).toBe('MATCHED');
+      expect(resultEmpty.finalReport?.legacyStatus).toBe('APPROVED');
       expect(
-        resultEmpty.finalReport?.flags.some((f) => f.includes('CATEGORY_MISMATCH')),
+        resultEmpty.finalReport?.flags?.some((f) => f.includes('CATEGORY_MISMATCH')),
       ).toBe(false);
     });
 
@@ -133,9 +141,10 @@ describe('EvaluatorNode', () => {
       };
 
       const result = await evaluator.run(state);
-      expect(result.finalReport?.status).toBe('APPROVED');
+      expect(result.finalReport?.status).toBe('MATCHED');
+      expect(result.finalReport?.legacyStatus).toBe('APPROVED');
       expect(
-        result.finalReport?.flags.some((f) => f.includes('CATEGORY_MISMATCH')),
+        result.finalReport?.flags?.some((f) => f.includes('CATEGORY_MISMATCH')),
       ).toBe(false);
     });
 
@@ -159,7 +168,9 @@ describe('EvaluatorNode', () => {
       };
 
       const result = await evaluator.run(state);
-      expect(result.finalReport?.status).toBe('FLAGGED_FOR_REVIEW');
+      expect(result.finalReport?.status).toBe('PARTIAL_MATCH');
+      expect(result.finalReport?.legacyStatus).toBe('FLAGGED_FOR_REVIEW');
+      expect(result.finalReport?.recommended_action).toBe('REQUIRE_CLARIFICATION');
       expect(result.finalReport?.flags).toContain(
         'CATEGORY_MISMATCH: Declared "Plumbing", Inferred "Civil Painting"',
       );
@@ -190,9 +201,12 @@ describe('EvaluatorNode', () => {
       };
 
       const result = await evaluator.run(state);
-      expect(result.finalReport?.status).toBe('REJECTED');
+      expect(result.finalReport?.status).toBe('INVALID_OR_SPAM');
+      expect(result.finalReport?.legacyStatus).toBe('REJECTED');
+      expect(result.finalReport?.recommended_action).toBe('REJECT_REQUEST');
+      expect(result.finalReport?.rejection_details.is_rejected).toBe(true);
       expect(
-        result.finalReport?.flags.some((f) => f.includes('VIOLATION_OR_ABUSE')),
+        result.finalReport?.flags?.some((f) => f.includes('VIOLATION')),
       ).toBe(true);
     });
 
@@ -219,9 +233,11 @@ describe('EvaluatorNode', () => {
       };
 
       const result = await evaluator.run(state);
-      expect(result.finalReport?.status).toBe('REJECTED');
+      expect(result.finalReport?.status).toBe('INVALID_OR_SPAM');
+      expect(result.finalReport?.legacyStatus).toBe('REJECTED');
+      expect(result.finalReport?.recommended_action).toBe('REJECT_REQUEST');
       expect(
-        result.finalReport?.flags.some((f) => f.includes('FANTASY_UNFEASIBLE')),
+        result.finalReport?.flags?.some((f) => f.includes('VIOLATION')),
       ).toBe(true);
     });
 
@@ -248,9 +264,12 @@ describe('EvaluatorNode', () => {
       };
 
       const result = await evaluator.run(state);
-      expect(result.finalReport?.status).toBe('REJECTED');
+      expect(result.finalReport?.status).toBe('MISMATCH');
+      expect(result.finalReport?.legacyStatus).toBe('REJECTED');
+      expect(result.finalReport?.recommended_action).toBe('REJECT_REQUEST');
+      expect(result.finalReport?.rejection_details.is_rejected).toBe(true);
       expect(
-        result.finalReport?.flags.some((f) => f.includes('OUT_OF_SCOPE')),
+        result.finalReport?.flags?.some((f) => f.includes('OUT_OF_SCOPE')),
       ).toBe(true);
     });
 
@@ -277,10 +296,12 @@ describe('EvaluatorNode', () => {
       };
 
       const result = await evaluator.run(state);
-      expect(result.finalReport?.status).toBe('FLAGGED_FOR_REVIEW');
+      expect(result.finalReport?.status).toBe('PARTIAL_MATCH');
+      expect(result.finalReport?.legacyStatus).toBe('FLAGGED_FOR_REVIEW');
+      expect(result.finalReport?.recommended_action).toBe('REQUIRE_CLARIFICATION');
       expect(
-        result.finalReport?.flags.some((f) =>
-          f.includes('BORDERLINE_NEEDS_INSPECTION'),
+        result.finalReport?.flags?.some((f) =>
+          f.includes('BORDERLINE'),
         ),
       ).toBe(true);
     });
@@ -294,7 +315,7 @@ describe('EvaluatorNode', () => {
         textModerationResult: {
           isClean: true,
           profanitiesOrViolations: [],
-          domainCategory: 'IN_SCOPE_LEGITIMATE',
+          domainCategory: 'BORDERLINE_NEEDS_INSPECTION',
           inferredCategory: 'Plumbing',
           feasibilityScore: 2,
           intentSummary: 'Plumbing for entire building',
@@ -308,10 +329,9 @@ describe('EvaluatorNode', () => {
       };
 
       const result = await evaluator.run(state);
-      expect(result.finalReport?.status).toBe('FLAGGED_FOR_REVIEW');
-      expect(
-        result.finalReport?.flags.some((f) => f.includes('LOW_FEASIBILITY')),
-      ).toBe(true);
+      expect(result.finalReport?.status).toBe('PARTIAL_MATCH');
+      expect(result.finalReport?.legacyStatus).toBe('FLAGGED_FOR_REVIEW');
+      expect(result.finalReport?.recommended_action).toBe('REQUIRE_CLARIFICATION');
     });
   });
 
@@ -339,11 +359,13 @@ describe('EvaluatorNode', () => {
       };
 
       const result = await evaluator.run(state);
-      expect(result.finalReport?.status).toBe('REJECTED');
-      expect(result.finalReport?.flags).toContain('TEXT_NOT_CLEAN');
+      expect(result.finalReport?.status).toBe('INVALID_OR_SPAM');
+      expect(result.finalReport?.legacyStatus).toBe('REJECTED');
+      expect(result.finalReport?.recommended_action).toBe('REJECT_REQUEST');
+      expect(result.finalReport?.flags).toContain('VIOLATION: Contains profanity');
     });
 
-    it('should flag for review if visual relevance is ABSURD_OR_UNFEASIBLE', async () => {
+    it('should flag for review (PARTIAL_MATCH) if visual relevance is ABSURD_OR_UNFEASIBLE but text is genuine', async () => {
       const state: LeadValidatorState = {
         ticketId: 'ticket-absurd-img',
         userText: 'Need living room false ceiling and lighting',
@@ -368,10 +390,55 @@ describe('EvaluatorNode', () => {
       };
 
       const result = await evaluator.run(state);
-      expect(result.finalReport?.status).toBe('FLAGGED_FOR_REVIEW');
+      expect(result.finalReport?.status).toBe('PARTIAL_MATCH');
+      expect(result.finalReport?.legacyStatus).toBe('FLAGGED_FOR_REVIEW');
+      expect(result.finalReport?.recommended_action).toBe('REQUIRE_CLARIFICATION');
+      expect(result.finalReport?.rejection_details.is_rejected).toBe(false);
       expect(
-        result.finalReport?.flags.some((f) => f.includes('VISUAL_ABSURDITY')),
+        result.finalReport?.flags?.some((f) => f.includes('VISUAL_ABSURDITY')),
       ).toBe(true);
+      expect(
+        result.finalReport?.analysis_stages.stage_2_visual_summary
+          .visual_consistency_verdict,
+      ).toBe('CONFLICTING');
+    });
+
+    it('should flag for review (PARTIAL_MATCH) and raise NON_WORK_SITE_IMAGE when text is genuine but visual depicts an unrelated car/automobile', async () => {
+      const state: LeadValidatorState = {
+        ticketId: 'ticket-car-img',
+        userText: 'Need complete house exterior painting in Bangalore',
+        mediaUrls: ['https://example.com/car.jpg'],
+        declaredCategory: 'Painting',
+        textModerationResult: {
+          isClean: true,
+          profanitiesOrViolations: [],
+          domainCategory: 'IN_SCOPE_LEGITIMATE',
+          inferredCategory: 'Painting',
+          feasibilityScore: 9,
+          intentSummary: 'House exterior painting',
+          reasoning: 'Standard civil painting service',
+        },
+        visionAnalysisResult: {
+          detectedElements: ['red sedan car parked on street'],
+          visualRelevance: 'MISMATCHED',
+          isHomeServiceSiteOrPlan: false,
+          isRealisticWorkSite: false,
+          mismatchReason: 'Image depicts an automobile/car, unrelated to residential painting or construction work site',
+        },
+      };
+
+      const result = await evaluator.run(state);
+      expect(result.finalReport?.status).toBe('PARTIAL_MATCH');
+      expect(result.finalReport?.legacyStatus).toBe('FLAGGED_FOR_REVIEW');
+      expect(result.finalReport?.recommended_action).toBe('REQUIRE_CLARIFICATION');
+      expect(result.finalReport?.flags).toBeDefined();
+      expect(
+        result.finalReport?.flags?.some((f) => f.includes('NON_WORK_SITE_IMAGE')),
+      ).toBe(true);
+      expect(
+        result.finalReport?.analysis_stages.stage_2_visual_summary
+          .visual_consistency_verdict,
+      ).toBe('CONFLICTING');
     });
 
     it('should flag for review if image is not relevant (MISMATCHED)', async () => {
@@ -398,10 +465,116 @@ describe('EvaluatorNode', () => {
       };
 
       const result = await evaluator.run(state);
-      expect(result.finalReport?.status).toBe('FLAGGED_FOR_REVIEW');
+      expect(result.finalReport?.status).toBe('PARTIAL_MATCH');
+      expect(result.finalReport?.legacyStatus).toBe('FLAGGED_FOR_REVIEW');
+      expect(result.finalReport?.recommended_action).toBe('REQUIRE_CLARIFICATION');
       expect(result.finalReport?.flags).toContain(
-        'IMAGE_NOT_RELEVANT: Image does not contain carpentry or furniture',
+        'IMAGE_MISMATCH: Image does not contain carpentry or furniture',
       );
+    });
+
+    it('should return INVALID_OR_SPAM for blank inputs', async () => {
+      const state: LeadValidatorState = {
+        ticketId: 'ticket-blank',
+        userText: '',
+        mediaUrls: [],
+        declaredCategory: '',
+      };
+
+      const result = await evaluator.run(state);
+      expect(result.finalReport?.status).toBe('INVALID_OR_SPAM');
+      expect(result.finalReport?.confidence_score).toBe(0.0);
+      expect(result.finalReport?.rejection_details.is_rejected).toBe(true);
+      expect(result.finalReport?.recommended_action).toBe('REJECT_REQUEST');
+      expect(result.finalReport?.analysis_stages.stage_1_text_summary.text_validity).toBe('AMBIGUOUS');
+    });
+
+    it('should consolidate LLM result and downgrade MATCHED to PARTIAL_MATCH when vision analysis flagged an unrelated car image', async () => {
+      const mockLlm = {
+        getModerationModelName: jest.fn().mockReturnValue('gpt-5-mini'),
+        completeMultiModalJson: jest.fn().mockResolvedValue({
+          status: 'MATCHED',
+          confidence_score: 0.95,
+          analysis_stages: {
+            stage_1_text_summary: {
+              identified_intent: 'Painting request',
+              extracted_keywords: ['Painting'],
+              text_validity: 'VALID',
+            },
+            stage_2_visual_summary: {
+              total_images_analyzed: 1,
+              image_breakdown: [
+                {
+                  image_index: 1,
+                  visual_evidence: 'Attached photo',
+                  aligns_with_text: true,
+                },
+              ],
+              visual_consistency_verdict: 'CONSISTENT',
+            },
+            stage_3_verification_notes: 'Validated against catalog',
+          },
+          matched_services: [
+            {
+              service_id: '33941d44-41df-4d92-b7e1-24a3fb4c7cb4',
+              service_name: 'Painting',
+              category: 'Painting',
+              relevance_score: 0.95,
+              matching_justification: 'Matches painting catalog service',
+            },
+          ],
+          rejection_details: {
+            is_rejected: false,
+            reason_category: null,
+            explanation: null,
+          },
+          recommended_action: 'ROUTE_TO_SERVICE',
+          flags: [],
+        }),
+      } as any;
+
+      const evaluatorWithLlm = new EvaluatorNode(undefined, mockLlm);
+
+      const state: LeadValidatorState = {
+        ticketId: 'ticket-llm-consolidation',
+        userText: 'Need 3BHK interior painting in Koramangala',
+        mediaUrls: ['https://example.com/car-photo.jpg'],
+        declaredCategory: 'Painting',
+        textModerationResult: {
+          isClean: true,
+          profanitiesOrViolations: [],
+          domainCategory: 'IN_SCOPE_LEGITIMATE',
+          inferredCategory: 'Painting',
+          feasibilityScore: 9,
+          intentSummary: 'Interior painting in Koramangala',
+          reasoning: 'Genuine painting requirement',
+        },
+        visionAnalysisResult: {
+          detectedElements: ['white sports car in garage'],
+          visualRelevance: 'MISMATCHED',
+          isHomeServiceSiteOrPlan: false,
+          isRealisticWorkSite: false,
+          mismatchReason: 'Image depicts an automobile/car rather than a painting work site',
+        },
+      };
+
+      const result = await evaluatorWithLlm.run(state);
+
+      // Verify consolidation guardrails:
+      // Status MUST NOT be MATCHED
+      expect(result.finalReport?.status).toBe('PARTIAL_MATCH');
+      expect(result.finalReport?.legacyStatus).toBe('FLAGGED_FOR_REVIEW');
+      expect(result.finalReport?.recommended_action).toBe('REQUIRE_CLARIFICATION');
+      expect(result.finalReport?.confidence_score).toBeLessThanOrEqual(0.65);
+      expect(
+        result.finalReport?.analysis_stages.stage_2_visual_summary
+          .visual_consistency_verdict,
+      ).toBe('CONFLICTING');
+      expect(result.finalReport?.flags).toBeDefined();
+      expect(result.finalReport?.flags?.length).toBeGreaterThan(0);
+      expect(
+        result.finalReport?.flags?.some((f) => f.includes('NON_WORK_SITE_IMAGE')),
+      ).toBe(true);
     });
   });
 });
