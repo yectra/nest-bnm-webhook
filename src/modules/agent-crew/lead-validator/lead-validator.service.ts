@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import {
   LeadValidatorGraphFactory,
   CompiledLeadValidatorGraph,
@@ -7,8 +7,13 @@ import {
   LeadValidationAuditLog,
   LeadValidatorState,
   ValidationReport,
+  ServiceVerificationReport,
 } from './lead-validator.types';
 import { MediaPreprocessorService } from './services/media-preprocessor.service';
+import {
+  CatalogFetcherService,
+  FALLBACK_CATALOG_SERVICES,
+} from './services/catalog-fetcher.service';
 
 @Injectable()
 export class LeadValidatorService {
@@ -18,6 +23,7 @@ export class LeadValidatorService {
   constructor(
     private readonly graphFactory: LeadValidatorGraphFactory,
     private readonly mediaPreprocessor: MediaPreprocessorService,
+    @Optional() private readonly catalogFetcher?: CatalogFetcherService,
   ) {}
 
   /**
@@ -58,6 +64,11 @@ export class LeadValidatorService {
         .filter(Boolean)
         .join('\n\n[Attached Document Content]:\n');
 
+      // 3. Fetch or resolve live catalog
+      const catalog = this.catalogFetcher
+        ? await this.catalogFetcher.fetchCatalog()
+        : FALLBACK_CATALOG_SERVICES;
+
       const graph = this.getGraph();
       const result = await graph.invoke({
         ticketId: data.ticketId,
@@ -65,6 +76,7 @@ export class LeadValidatorService {
         userText: combinedUserText,
         mediaUrls: processedImages,
         declaredCategory,
+        catalogServices: catalog,
       });
 
       const report = result.finalReport;
@@ -75,7 +87,7 @@ export class LeadValidatorService {
         );
       }
 
-      // Output single consolidated, human-readable JSON log
+      // Output structured audit log for pipeline audit trail
       const auditLog = this.buildStructuredAuditLog(result);
       this.logger.log(`\n${JSON.stringify(auditLog, null, 2)}`);
 
@@ -88,18 +100,41 @@ export class LeadValidatorService {
         errStack,
       );
 
-      // Return a safe fallback report so callers don't crash
+      // Return a safe fallback report conforming to ServiceVerificationReport
       const fallbackReport: ValidationReport = {
-        status: 'FLAGGED_FOR_REVIEW',
+        status: 'PARTIAL_MATCH',
+        confidence_score: 0.0,
+        analysis_stages: {
+          stage_1_text_summary: {
+            identified_intent: 'Pipeline execution failed',
+            extracted_keywords: [],
+            text_validity: 'AMBIGUOUS',
+          },
+          stage_2_visual_summary: {
+            total_images_analyzed: 0,
+            image_breakdown: [],
+            visual_consistency_verdict: 'IRRELEVANT',
+          },
+          stage_3_verification_notes:
+            'Lead validation failed due to an internal system error.',
+        },
+        matched_services: [],
+        rejection_details: {
+          is_rejected: false,
+          reason_category: 'SYSTEM_ERROR',
+          explanation: errMessage,
+        },
+        recommended_action: 'REQUIRE_CLARIFICATION',
         flags: ['SYSTEM_ERROR: Pipeline failed to execute'],
         summary: 'Lead validation failed due to an internal system error.',
         timestamp: new Date().toISOString(),
+        legacyStatus: 'FLAGGED_FOR_REVIEW',
       };
 
       const fallbackAuditLog: LeadValidationAuditLog = {
         ticketId: data.ticketId,
         eventType: data.eventType || 'POST_YOUR_REQUIREMENTS',
-        timestamp: fallbackReport.timestamp,
+        timestamp: fallbackReport.timestamp!,
         pipelineExecution: {
           stepA_TextModeration: {
             agentName: 'TextModeratorAgent',
@@ -138,8 +173,8 @@ export class LeadValidatorService {
               'Consolidates findings from Step A and Step B to generate the final audit status',
             overallDecision: fallbackReport.status,
             domainCategory: 'BORDERLINE_NEEDS_INSPECTION',
-            flagsRaised: fallbackReport.flags,
-            summary: fallbackReport.summary,
+            flagsRaised: fallbackReport.flags!,
+            summary: fallbackReport.summary!,
           },
         },
       };
@@ -150,7 +185,10 @@ export class LeadValidatorService {
     }
   }
 
-  private buildStructuredAuditLog(
+  /**
+   * Helper method to build structured audit log for audit trail.
+   */
+  public buildStructuredAuditLog(
     state: LeadValidatorState,
   ): LeadValidationAuditLog {
     const textResult = state.textModerationResult;
@@ -180,7 +218,16 @@ export class LeadValidatorService {
     const visualRelevance =
       visionResult?.visualRelevance ||
       (visionResult?.isImageRelevant === false ? 'MISMATCHED' : 'RELEVANT');
-    const isVisionPassed = visualRelevance === 'RELEVANT';
+    const isVisionPassed =
+      visualRelevance === 'RELEVANT' &&
+      (visionResult?.isRealisticWorkSite ?? true) &&
+      (visionResult?.isHomeServiceSiteOrPlan ?? true) &&
+      !Boolean(
+        visionResult?.mismatchReason &&
+          visionResult.mismatchReason.trim().length > 0 &&
+          visionResult.mismatchReason !== 'None',
+      );
+
 
     return {
       ticketId: state.ticketId,
@@ -232,7 +279,7 @@ export class LeadValidatorService {
           agentName: 'EvaluatorAgent',
           purpose:
             'Consolidates findings from Step A and Step B to generate the final audit status',
-          overallDecision: finalReport?.status || 'FLAGGED_FOR_REVIEW',
+          overallDecision: finalReport?.status || 'PARTIAL_MATCH',
           domainCategory,
           flagsRaised: finalReport?.flags || [],
           summary: finalReport?.summary || 'Lead validation completed.',

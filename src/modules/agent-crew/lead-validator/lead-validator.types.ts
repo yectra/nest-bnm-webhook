@@ -1,4 +1,5 @@
 import { Annotation } from '@langchain/langgraph';
+import { CatalogServiceItem } from './services/catalog-fetcher.service';
 
 export type DomainCategory =
   | 'IN_SCOPE_LEGITIMATE'
@@ -8,6 +9,79 @@ export type DomainCategory =
   | 'BORDERLINE_NEEDS_INSPECTION';
 
 export type EvaluationStatus = 'APPROVED' | 'FLAGGED_FOR_REVIEW' | 'REJECTED';
+
+export type VerificationStatus =
+  | 'MATCHED'
+  | 'PARTIAL_MATCH'
+  | 'MISMATCH'
+  | 'INVALID_OR_SPAM';
+
+export type TextValidity = 'VALID' | 'AMBIGUOUS' | 'INVALID';
+
+export type VisualConsistencyVerdict =
+  | 'CONSISTENT'
+  | 'CONFLICTING'
+  | 'IRRELEVANT';
+
+export type RecommendedAction =
+  | 'ROUTE_TO_SERVICE'
+  | 'REQUIRE_CLARIFICATION'
+  | 'REJECT_REQUEST';
+
+export interface Stage1TextSummary {
+  identified_intent: string;
+  extracted_keywords: string[];
+  text_validity: TextValidity;
+}
+
+export interface ImageBreakdownItem {
+  image_index: number;
+  visual_evidence: string;
+  aligns_with_text: boolean;
+}
+
+export interface Stage2VisualSummary {
+  total_images_analyzed: number;
+  image_breakdown: ImageBreakdownItem[];
+  visual_consistency_verdict: VisualConsistencyVerdict;
+}
+
+export interface MatchedServiceItem {
+  service_id: string;
+  service_name: string;
+  category: string;
+  relevance_score: number;
+  matching_justification: string;
+}
+
+export interface RejectionDetails {
+  is_rejected: boolean;
+  reason_category: string | null;
+  explanation: string | null;
+}
+
+export interface AnalysisStages {
+  stage_1_text_summary: Stage1TextSummary;
+  stage_2_visual_summary: Stage2VisualSummary;
+  stage_3_verification_notes: string;
+}
+
+export interface ServiceVerificationReport {
+  status: VerificationStatus;
+  confidence_score: number;
+  analysis_stages: AnalysisStages;
+  matched_services: MatchedServiceItem[];
+  rejection_details: RejectionDetails;
+  recommended_action: RecommendedAction;
+
+  // Legacy convenience properties for backward compatibility
+  flags?: string[];
+  summary?: string;
+  timestamp?: string;
+  legacyStatus?: EvaluationStatus;
+}
+
+export type ValidationReport = ServiceVerificationReport;
 
 export interface TextModerationResult {
   isClean?: boolean;
@@ -33,13 +107,6 @@ export interface VisionAnalysisResult {
 
   // Backward-compatibility
   isImageRelevant?: boolean;
-}
-
-export interface ValidationReport {
-  status: EvaluationStatus;
-  flags: string[];
-  summary: string;
-  timestamp: string;
 }
 
 export interface StepATextModerationReport {
@@ -76,7 +143,7 @@ export interface StepBVisionAnalysisReport {
 export interface StepCFinalEvaluationReport {
   agentName: string;
   purpose: string;
-  overallDecision: EvaluationStatus;
+  overallDecision: string;
   domainCategory: DomainCategory;
   flagsRaised: string[];
   summary: string;
@@ -109,6 +176,10 @@ export const LeadValidatorStateAnnotation = Annotation.Root({
     reducer: (_current, update) => update,
     default: () => undefined,
   }),
+  catalogServices: Annotation<CatalogServiceItem[] | undefined>({
+    reducer: (_current, update) => update,
+    default: () => undefined,
+  }),
   textModerationResult: Annotation<TextModerationResult | undefined>({
     reducer: (_current, update) => update,
     default: () => undefined,
@@ -132,12 +203,14 @@ export const LeadValidatorStateAnnotation = Annotation.Root({
 });
 
 export type LeadValidatorGraphState = typeof LeadValidatorStateAnnotation.State;
+
 export interface LeadValidatorState {
   ticketId: string;
   userText: string;
   eventType?: string;
   mediaUrls?: string[];
   declaredCategory?: string;
+  catalogServices?: CatalogServiceItem[];
   textModerationResult?: TextModerationResult;
   textModelUsed?: string;
   visionAnalysisResult?: VisionAnalysisResult;
