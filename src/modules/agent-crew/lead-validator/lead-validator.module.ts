@@ -6,9 +6,11 @@ import { LeadValidatorGraphFactory } from './lead-validator-graph.factory';
 import { LeadValidatorService } from './lead-validator.service';
 import { CrewLlmProvider } from '../services/crew-llm.provider';
 import { MediaPreprocessorService } from './services/media-preprocessor.service';
+import { CatalogFetcherService } from './services/catalog-fetcher.service';
 
 @Module({
   providers: [
+    CatalogFetcherService,
     MediaPreprocessorService,
     TextModeratorNode,
     VisionAnalystNode,
@@ -17,6 +19,6 @@ import { MediaPreprocessorService } from './services/media-preprocessor.service'
     LeadValidatorService,
     CrewLlmProvider,
   ],
-  exports: [LeadValidatorService, MediaPreprocessorService],
+  exports: [LeadValidatorService, MediaPreprocessorService, CatalogFetcherService],
 })
 export class LeadValidatorModule {}
