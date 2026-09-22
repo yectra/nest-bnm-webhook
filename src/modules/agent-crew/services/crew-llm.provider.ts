@@ -99,4 +99,53 @@ export class CrewLlmProvider {
     });
     return response?.choices?.[0]?.message?.content?.trim() ?? '';
   }
+
+  /** Request a strict JSON object response using multi-modal inputs (text + multiple images). */
+  async completeMultiModalJson<T>(
+    systemPrompt: string,
+    userPrompt: string,
+    imageUrls: string[],
+    modelOverride?: string,
+  ): Promise<T | null> {
+    try {
+      const content: OpenAI.Chat.ChatCompletionContentPart[] = [
+        { type: 'text', text: userPrompt },
+      ];
+
+      if (Array.isArray(imageUrls)) {
+        for (const url of imageUrls) {
+          if (url && typeof url === 'string' && url.trim().length > 0) {
+            content.push({
+              type: 'image_url',
+              image_url: { url: url.trim() },
+            });
+          }
+        }
+      }
+
+      const response = await this.client.chat.completions.create({
+        model: modelOverride ?? this.model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content },
+        ],
+        response_format: { type: 'json_object' },
+      });
+
+      const raw = response?.choices?.[0]?.message?.content;
+      if (!raw) {
+        return null;
+      }
+
+      // Strip markdown code fences if model accidentally wrapped the JSON
+      const cleanJson = raw
+        .replace(/^```(?:json)?\s*/i, '')
+        .replace(/\s*```$/i, '')
+        .trim();
+      return JSON.parse(cleanJson) as T;
+    } catch (error) {
+      this.logger.warn('Multi-modal JSON completion failed', error);
+      return null;
+    }
+  }
 }
