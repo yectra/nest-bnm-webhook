@@ -1,35 +1,52 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ChatOpenAI } from '@langchain/openai';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 
 /**
- * Builds the chat model for the deep agent, pointed at a low-cost
- * OpenAI-compatible endpoint (default model: gpt-5-mini). Returns
- * undefined when no endpoint is configured — callers must degrade
- * gracefully, never crash.
+ * Builds the chat model for the deep agent, pointed at a configured
+ * OpenAI-compatible endpoint. Returns undefined when no endpoint is
+ * configured — callers degrade gracefully.
  */
 @Injectable()
 export class AgentModelService {
+  private readonly logger = new Logger(AgentModelService.name);
+
   constructor(private readonly configService: ConfigService) {}
 
   isConfigured(): boolean {
-    return Boolean(this.configService.get<string>('whatsappAgent.llm.baseUrl'));
+    return Boolean(
+      this.configService.get<string>('whatsappAgent.llm.baseUrl') ||
+        this.configService.get<string>('WHATSAPP_AGENT_LLM_BASE_URL'),
+    );
   }
 
   createModel(): BaseChatModel | undefined {
     if (!this.isConfigured()) {
       return undefined;
     }
+    const model =
+      this.configService.get<string>('whatsappAgent.llm.model') ||
+      this.configService.get<string>('WHATSAPP_AGENT_LLM_MODEL');
+    if (!model) {
+      throw new Error('WHATSAPP_AGENT_LLM_MODEL is required but not configured.');
+    }
+    this.logger.log(`[AI MODEL] stage=intake model=${model}`);
+
+    const apiKey =
+      this.configService.get<string>('whatsappAgent.llm.apiKey') ||
+      this.configService.get<string>('WHATSAPP_AGENT_LLM_API_KEY') ||
+      'not-required';
+
+    const baseURL =
+      this.configService.get<string>('whatsappAgent.llm.baseUrl') ||
+      this.configService.get<string>('WHATSAPP_AGENT_LLM_BASE_URL');
+
     return new ChatOpenAI({
-      model:
-        this.configService.get<string>('whatsappAgent.llm.model') ||
-        'gpt-5-mini',
-      apiKey:
-        this.configService.get<string>('whatsappAgent.llm.apiKey') ||
-        'not-required',
+      model,
+      apiKey,
       configuration: {
-        baseURL: this.configService.get<string>('whatsappAgent.llm.baseUrl'),
+        baseURL,
       },
       maxRetries: 1,
       timeout: 30_000,

@@ -1,6 +1,16 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
+import { AiUsageTelemetryService } from '../../../common/telemetry/ai-usage-telemetry.service';
+
+export interface TelemetryOptions {
+  requestId?: string;
+  stage: string;
+  process: string;
+  modelEnv: string;
+  provider?: string;
+  callIndex?: number;
+}
 
 /**
  * Thin wrapper around the Azure AI Foundry OpenAI v1 endpoint for the crew's
@@ -12,18 +22,51 @@ export class CrewLlmProvider {
   private readonly logger = new Logger(CrewLlmProvider.name);
   private readonly client: OpenAI;
   private readonly model: string;
-  private readonly moderationModel: string;
+  private readonly textModel: string;
+  private readonly imageModel: string;
+  private readonly evaluationModel: string;
 
-  constructor(config: ConfigService) {
-    this.model =
-      config.get<string>('AGENT_CREW_MODEL') ??
-      config.get<string>('OPENAI_MODEL') ??
-      'gpt-5.1';
-    this.moderationModel =
-      config.get<string>('OPENAI_MODERATION_MODEL') ??
-      config.get<string>('OPENAI_MODERATION_DEPLOYMENT') ??
-      config.get<string>('OPENAI_IMAGE_MODEL') ??
-      'gpt-5-mini';
+  constructor(
+    config: ConfigService,
+    @Optional() private readonly telemetryService?: AiUsageTelemetryService,
+  ) {
+    const agentCrewModel =
+      config.get<string>('AGENT_CREW_MODEL') ||
+      config.get<string>('azure.agentCrewModel');
+    if (!agentCrewModel) {
+      throw new Error('AGENT_CREW_MODEL is required but not configured.');
+    }
+    this.model = agentCrewModel;
+
+    const textModel =
+      config.get<string>('OPENAI_TEXT_MODEL') ||
+      config.get<string>('azure.openaiTextModel');
+    if (!textModel) {
+      throw new Error('OPENAI_TEXT_MODEL is required but not configured.');
+    }
+    this.textModel = textModel;
+
+    const imageModel =
+      config.get<string>('OPENAI_IMAGE_MODEL') ||
+      config.get<string>('azure.openaiImageModel');
+    if (!imageModel) {
+      throw new Error('OPENAI_IMAGE_MODEL is required but not configured.');
+    }
+    this.imageModel = imageModel;
+
+    const evaluationModel =
+      config.get<string>('OPENAI_EVALUATION_MODEL') ||
+      config.get<string>('azure.openaiEvaluationModel');
+    if (!evaluationModel) {
+      throw new Error('OPENAI_EVALUATION_MODEL is required but not configured.');
+    }
+    this.evaluationModel = evaluationModel;
+
+    this.logger.log(`[AI MODEL] stage=crew model=${this.model}`);
+    this.logger.log(`[AI MODEL] stage=text model=${this.textModel}`);
+    this.logger.log(`[AI MODEL] stage=image model=${this.imageModel}`);
+    this.logger.log(`[AI MODEL] stage=evaluation model=${this.evaluationModel}`);
+
     const timeout = config.get<number>('OPENAI_TIMEOUT_MS') ?? 30000;
 
     this.client = new OpenAI({
@@ -38,23 +81,67 @@ export class CrewLlmProvider {
     return this.model;
   }
 
+  getTextModelName(): string {
+    return this.textModel;
+  }
+
+  getImageModelName(): string {
+    return this.imageModel;
+  }
+
+  getEvaluationModelName(): string {
+    return this.evaluationModel;
+  }
+
+  /**
+   * Deprecated backward-compatible alias.
+   * Prefer getTextModelName() for text moderation.
+   */
   getModerationModelName(): string {
-    return this.moderationModel;
+    return this.textModel;
   }
 
   async complete(
     systemPrompt: string,
     userPrompt: string,
     modelOverride?: string,
+    options?: TelemetryOptions,
   ): Promise<string> {
-    const response = await this.client.chat.completions.create({
-      model: modelOverride ?? this.model,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-    });
-    return response?.choices?.[0]?.message?.content?.trim() ?? '';
+    const startTime = Date.now();
+    let response: OpenAI.Chat.Completions.ChatCompletion | null = null;
+    let errorOccurred: unknown = null;
+
+    try {
+      response = await this.client.chat.completions.create({
+        model: modelOverride ?? this.model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+      });
+      return response?.choices?.[0]?.message?.content?.trim() ?? '';
+    } catch (error) {
+      errorOccurred = error;
+      throw error;
+    } finally {
+      const latencyMs = Date.now() - startTime;
+      if (options && this.telemetryService) {
+        this.telemetryService.recordUsage({
+          requestId: options.requestId,
+          stage: options.stage,
+          process: options.process,
+          provider: options.provider || 'azure-openai',
+          model: modelOverride ?? this.model,
+          modelEnv: options.modelEnv,
+          responseUsage: response?.usage || null,
+          latencyMs,
+          usageAvailable: Boolean(response?.usage),
+          success: !errorOccurred && Boolean(response),
+          callIndex: options.callIndex,
+          error: errorOccurred,
+        });
+      }
+    }
   }
 
   /** Request a strict JSON object response and parse it. Returns null on failure. */
@@ -62,9 +149,14 @@ export class CrewLlmProvider {
     systemPrompt: string,
     userPrompt: string,
     modelOverride?: string,
+    options?: TelemetryOptions,
   ): Promise<T | null> {
+    const startTime = Date.now();
+    let response: OpenAI.Chat.Completions.ChatCompletion | null = null;
+    let errorOccurred: unknown = null;
+
     try {
-      const response = await this.client.chat.completions.create({
+      response = await this.client.chat.completions.create({
         model: modelOverride ?? this.model,
         messages: [
           { role: 'system', content: systemPrompt },
@@ -78,26 +170,77 @@ export class CrewLlmProvider {
       }
       return JSON.parse(raw) as T;
     } catch (error) {
+      errorOccurred = error;
       this.logger.warn('JSON completion failed', error);
       return null;
+    } finally {
+      const latencyMs = Date.now() - startTime;
+      if (options && this.telemetryService) {
+        this.telemetryService.recordUsage({
+          requestId: options.requestId,
+          stage: options.stage,
+          process: options.process,
+          provider: options.provider || 'azure-openai',
+          model: modelOverride ?? this.model,
+          modelEnv: options.modelEnv,
+          responseUsage: response?.usage || null,
+          latencyMs,
+          usageAvailable: Boolean(response?.usage),
+          success: !errorOccurred && Boolean(response),
+          callIndex: options.callIndex,
+          error: errorOccurred,
+        });
+      }
     }
   }
 
   /** GPT-5 vision analysis of a single image URL. */
-  async describeImage(prompt: string, imageUrl: string, modelOverride?: string): Promise<string> {
-    const response = await this.client.chat.completions.create({
-      model: modelOverride ?? this.model,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: prompt },
-            { type: 'image_url', image_url: { url: imageUrl } },
-          ],
-        },
-      ],
-    });
-    return response?.choices?.[0]?.message?.content?.trim() ?? '';
+  async describeImage(
+    prompt: string,
+    imageUrl: string,
+    modelOverride?: string,
+    options?: TelemetryOptions,
+  ): Promise<string> {
+    const startTime = Date.now();
+    let response: OpenAI.Chat.Completions.ChatCompletion | null = null;
+    let errorOccurred: unknown = null;
+
+    try {
+      response = await this.client.chat.completions.create({
+        model: modelOverride ?? this.model,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: prompt },
+              { type: 'image_url', image_url: { url: imageUrl } },
+            ],
+          },
+        ],
+      });
+      return response?.choices?.[0]?.message?.content?.trim() ?? '';
+    } catch (error) {
+      errorOccurred = error;
+      throw error;
+    } finally {
+      const latencyMs = Date.now() - startTime;
+      if (options && this.telemetryService) {
+        this.telemetryService.recordUsage({
+          requestId: options.requestId,
+          stage: options.stage,
+          process: options.process,
+          provider: options.provider || 'azure-openai',
+          model: modelOverride ?? this.model,
+          modelEnv: options.modelEnv,
+          responseUsage: response?.usage || null,
+          latencyMs,
+          usageAvailable: Boolean(response?.usage),
+          success: !errorOccurred && Boolean(response),
+          callIndex: options.callIndex,
+          error: errorOccurred,
+        });
+      }
+    }
   }
 
   /** Request a strict JSON object response using multi-modal inputs (text + multiple images). */
@@ -106,7 +249,12 @@ export class CrewLlmProvider {
     userPrompt: string,
     imageUrls: string[],
     modelOverride?: string,
+    options?: TelemetryOptions,
   ): Promise<T | null> {
+    const startTime = Date.now();
+    let response: OpenAI.Chat.Completions.ChatCompletion | null = null;
+    let errorOccurred: unknown = null;
+
     try {
       const content: OpenAI.Chat.ChatCompletionContentPart[] = [
         { type: 'text', text: userPrompt },
@@ -123,7 +271,7 @@ export class CrewLlmProvider {
         }
       }
 
-      const response = await this.client.chat.completions.create({
+      response = await this.client.chat.completions.create({
         model: modelOverride ?? this.model,
         messages: [
           { role: 'system', content: systemPrompt },
@@ -144,8 +292,27 @@ export class CrewLlmProvider {
         .trim();
       return JSON.parse(cleanJson) as T;
     } catch (error) {
+      errorOccurred = error;
       this.logger.warn('Multi-modal JSON completion failed', error);
       return null;
+    } finally {
+      const latencyMs = Date.now() - startTime;
+      if (options && this.telemetryService) {
+        this.telemetryService.recordUsage({
+          requestId: options.requestId,
+          stage: options.stage,
+          process: options.process,
+          provider: options.provider || 'azure-openai',
+          model: modelOverride ?? this.model,
+          modelEnv: options.modelEnv,
+          responseUsage: response?.usage || null,
+          latencyMs,
+          usageAvailable: Boolean(response?.usage),
+          success: !errorOccurred && Boolean(response),
+          callIndex: options.callIndex,
+          error: errorOccurred,
+        });
+      }
     }
   }
 }

@@ -63,9 +63,14 @@ export class ImageAgentService implements CrewAgentDefinition {
     this.maxImages = config.get<number>('AGENT_CREW_MAX_IMAGES') ?? 4;
     const flag = config.get<boolean | string>('AGENT_CREW_IMAGE_AGENT_ENABLED');
     this.isEnabled = flag === true || flag === 'true';
-    this.imageModel =
-      config.get<string>('OPENAI_IMAGE_MODEL') ??
-      'gpt-5-mini';
+    const imageModel =
+      config.get<string>('OPENAI_IMAGE_MODEL') ||
+      config.get<string>('azure.openaiImageModel');
+    if (!imageModel) {
+      throw new Error('OPENAI_IMAGE_MODEL is required but not configured.');
+    }
+    this.imageModel = imageModel;
+    this.logger.log(`[AI MODEL] stage=image model=${this.imageModel}`);
   }
 
   /** Picture analysis is opt-in: off unless AGENT_CREW_IMAGE_AGENT_ENABLED=true. */

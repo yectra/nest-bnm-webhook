@@ -14,6 +14,8 @@ import {
   CatalogFetcherService,
   FALLBACK_CATALOG_SERVICES,
 } from './services/catalog-fetcher.service';
+import { CrewLlmProvider } from '../services/crew-llm.provider';
+import { AiUsageTelemetryService } from '../../../common/telemetry/ai-usage-telemetry.service';
 
 @Injectable()
 export class LeadValidatorService {
@@ -24,6 +26,8 @@ export class LeadValidatorService {
     private readonly graphFactory: LeadValidatorGraphFactory,
     private readonly mediaPreprocessor: MediaPreprocessorService,
     @Optional() private readonly catalogFetcher?: CatalogFetcherService,
+    @Optional() private readonly llm?: CrewLlmProvider,
+    @Optional() private readonly telemetryService?: AiUsageTelemetryService,
   ) {}
 
   /**
@@ -72,7 +76,7 @@ export class LeadValidatorService {
       const graph = this.getGraph();
       const result = await graph.invoke({
         ticketId: data.ticketId,
-        eventType: data.eventType || 'POST_YOUR_REQUIREMENTS',
+        eventType: data.eventType || 'UNKNOWN_EVENT',
         userText: combinedUserText,
         mediaUrls: processedImages,
         declaredCategory,
@@ -90,6 +94,13 @@ export class LeadValidatorService {
       // Output structured audit log for pipeline audit trail
       const auditLog = this.buildStructuredAuditLog(result);
       this.logger.log(`\n${JSON.stringify(auditLog, null, 2)}`);
+
+      report.ticketId = data.ticketId;
+      report.eventType = data.eventType || 'UNKNOWN_EVENT';
+      report.pipelineExecution = auditLog.pipelineExecution;
+      report.aiUsageSummary = auditLog.aiUsageSummary;
+
+      this.telemetryService?.emitSummary(data.ticketId);
 
       return report;
     } catch (error: unknown) {
@@ -131,14 +142,18 @@ export class LeadValidatorService {
         legacyStatus: 'FLAGGED_FOR_REVIEW',
       };
 
+      const textModelName = this.llm ? this.llm.getTextModelName() : 'UNKNOWN_MODEL';
+      const imageModelName = this.llm ? this.llm.getImageModelName() : 'UNKNOWN_MODEL';
+      const evaluationModelName = this.llm ? this.llm.getEvaluationModelName() : 'UNKNOWN_MODEL';
+
       const fallbackAuditLog: LeadValidationAuditLog = {
         ticketId: data.ticketId,
-        eventType: data.eventType || 'POST_YOUR_REQUIREMENTS',
+        eventType: data.eventType || 'UNKNOWN_EVENT',
         timestamp: fallbackReport.timestamp!,
         pipelineExecution: {
           stepA_TextModeration: {
             agentName: 'TextModeratorAgent',
-            modelUsed: 'gpt-5-mini',
+            modelUsed: textModelName,
             purpose:
               'Screens profanity, physical feasibility, and BNM domain qualification',
             status: 'FLAGGED',
@@ -151,10 +166,13 @@ export class LeadValidatorService {
               inferredCategory: 'Unknown (Error)',
               reasoning: 'Pipeline failed to execute',
             },
+            aiUsage: this.telemetryService
+              ? this.telemetryService.getStageUsage(data.ticketId, 'text')
+              : null,
           },
           stepB_VisionAnalysis: {
             agentName: 'VisionAnalystAgent',
-            modelUsed: 'gpt-5-mini',
+            modelUsed: imageModelName,
             purpose:
               'Verifies visual evidence against realistic property work sites and category reality',
             status: 'SKIPPED',
@@ -166,20 +184,37 @@ export class LeadValidatorService {
               visualRelevance: 'RELEVANT',
               mismatchReason: 'Pipeline failed to execute',
             },
+            aiUsage: this.telemetryService
+              ? this.telemetryService.getStageUsage(data.ticketId, 'image')
+              : null,
           },
           stepC_FinalEvaluation: {
             agentName: 'EvaluatorAgent',
+            modelUsed: evaluationModelName,
             purpose:
               'Consolidates findings from Step A and Step B to generate the final audit status',
             overallDecision: fallbackReport.status,
             domainCategory: 'BORDERLINE_NEEDS_INSPECTION',
             flagsRaised: fallbackReport.flags!,
             summary: fallbackReport.summary!,
+            aiUsage: this.telemetryService
+              ? this.telemetryService.getStageUsage(data.ticketId, 'evaluation')
+              : null,
           },
         },
+        aiUsageSummary: this.telemetryService
+          ? this.telemetryService.getSummaryReport(data.ticketId)
+          : undefined,
       };
 
       this.logger.log(`\n${JSON.stringify(fallbackAuditLog, null, 2)}`);
+
+      fallbackReport.ticketId = data.ticketId;
+      fallbackReport.eventType = data.eventType || 'UNKNOWN_EVENT';
+      fallbackReport.pipelineExecution = fallbackAuditLog.pipelineExecution;
+      fallbackReport.aiUsageSummary = fallbackAuditLog.aiUsageSummary;
+
+      this.telemetryService?.emitSummary(data.ticketId);
 
       return fallbackReport;
     }
@@ -228,15 +263,32 @@ export class LeadValidatorService {
           visionResult.mismatchReason !== 'None',
       );
 
+    const fallbackTextModel = this.llm ? this.llm.getTextModelName() : 'UNKNOWN_MODEL';
+    const fallbackImageModel = this.llm ? this.llm.getImageModelName() : 'UNKNOWN_MODEL';
+    const fallbackEvalModel = this.llm ? this.llm.getEvaluationModelName() : 'UNKNOWN_MODEL';
+
+    const textAiUsage = this.telemetryService
+      ? this.telemetryService.getStageUsage(state.ticketId, 'text')
+      : null;
+    const visionAiUsage = this.telemetryService
+      ? this.telemetryService.getStageUsage(state.ticketId, 'image')
+      : null;
+    const evalAiUsage = this.telemetryService
+      ? this.telemetryService.getStageUsage(state.ticketId, 'evaluation')
+      : null;
+
+    const aiUsageSummary = this.telemetryService
+      ? this.telemetryService.getSummaryReport(state.ticketId)
+      : undefined;
 
     return {
       ticketId: state.ticketId,
-      eventType: state.eventType || 'POST_YOUR_REQUIREMENTS',
+      eventType: state.eventType || 'UNKNOWN_EVENT',
       timestamp: finalReport?.timestamp || new Date().toISOString(),
       pipelineExecution: {
         stepA_TextModeration: {
           agentName: 'TextModeratorAgent',
-          modelUsed: state.textModelUsed || 'gpt-5-mini',
+          modelUsed: state.textModelUsed || fallbackTextModel,
           purpose:
             'Screens profanity, physical feasibility, and BNM domain qualification',
           status: isTextPassed
@@ -255,10 +307,11 @@ export class LeadValidatorService {
             reasoning:
               textResult?.reasoning || 'Intake qualification completed',
           },
+          aiUsage: textAiUsage,
         },
         stepB_VisionAnalysis: {
           agentName: 'VisionAnalystAgent',
-          modelUsed: state.visionModelUsed || 'gpt-5-mini',
+          modelUsed: state.visionModelUsed || fallbackImageModel,
           purpose:
             'Verifies visual evidence against realistic property work sites and category reality',
           status: !hasMedia ? 'SKIPPED' : isVisionPassed ? 'PASSED' : 'FLAGGED',
@@ -274,17 +327,21 @@ export class LeadValidatorService {
             visualRelevance,
             mismatchReason: visionResult?.mismatchReason || null,
           },
+          aiUsage: visionAiUsage,
         },
         stepC_FinalEvaluation: {
           agentName: 'EvaluatorAgent',
+          modelUsed: state.evaluationModelUsed || fallbackEvalModel,
           purpose:
             'Consolidates findings from Step A and Step B to generate the final audit status',
           overallDecision: finalReport?.status || 'PARTIAL_MATCH',
           domainCategory,
           flagsRaised: finalReport?.flags || [],
           summary: finalReport?.summary || 'Lead validation completed.',
+          aiUsage: evalAiUsage,
         },
       },
+      aiUsageSummary,
     };
   }
 }
