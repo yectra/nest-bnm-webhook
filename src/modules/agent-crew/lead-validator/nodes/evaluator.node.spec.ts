@@ -491,6 +491,9 @@ describe('EvaluatorNode', () => {
 
     it('should consolidate LLM result and downgrade MATCHED to PARTIAL_MATCH when vision analysis flagged an unrelated car image', async () => {
       const mockLlm = {
+        getTextModelName: jest.fn().mockReturnValue('gpt-5-mini'),
+        getImageModelName: jest.fn().mockReturnValue('gpt-5-mini'),
+        getEvaluationModelName: jest.fn().mockReturnValue('gpt-5-mini'),
         getModerationModelName: jest.fn().mockReturnValue('gpt-5-mini'),
         completeMultiModalJson: jest.fn().mockResolvedValue({
           status: 'MATCHED',

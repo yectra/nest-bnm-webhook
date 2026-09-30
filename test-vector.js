@@ -11,7 +11,7 @@ async function test() {
   try {
     const text = 'Tell me about Interior Designers';
     const embedResponse = await openai.embeddings.create({
-      model: process.env.EMBEDDING_MODEL || 'text-embedding-3-small',
+      model: process.env.EMBEDDING_MODEL,
       input: [text],
       dimensions: 1536
     });

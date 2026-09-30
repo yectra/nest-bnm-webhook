@@ -74,11 +74,15 @@ export interface ServiceVerificationReport {
   rejection_details: RejectionDetails;
   recommended_action: RecommendedAction;
 
-  // Legacy convenience properties for backward compatibility
+  // Legacy convenience properties & structured execution telemetry
   flags?: string[];
   summary?: string;
   timestamp?: string;
   legacyStatus?: EvaluationStatus;
+  ticketId?: string;
+  eventType?: string;
+  pipelineExecution?: LeadValidationPipelineExecution;
+  aiUsageSummary?: AiUsageSummaryReport;
 }
 
 export type ValidationReport = ServiceVerificationReport;
@@ -109,6 +113,11 @@ export interface VisionAnalysisResult {
   isImageRelevant?: boolean;
 }
 
+import {
+  AiStepUsageInfo,
+  AiUsageSummaryReport,
+} from '../../../common/telemetry/ai-usage-telemetry.service';
+
 export interface StepATextModerationReport {
   agentName: string;
   modelUsed: string;
@@ -123,6 +132,7 @@ export interface StepATextModerationReport {
     inferredCategory: string;
     reasoning: string;
   };
+  aiUsage?: AiStepUsageInfo | null;
 }
 
 export interface StepBVisionAnalysisReport {
@@ -138,26 +148,32 @@ export interface StepBVisionAnalysisReport {
     visualRelevance: 'RELEVANT' | 'MISMATCHED' | 'ABSURD_OR_UNFEASIBLE';
     mismatchReason: string | null;
   };
+  aiUsage?: AiStepUsageInfo | null;
 }
 
 export interface StepCFinalEvaluationReport {
   agentName: string;
+  modelUsed: string;
   purpose: string;
   overallDecision: string;
   domainCategory: DomainCategory;
   flagsRaised: string[];
   summary: string;
+  aiUsage?: AiStepUsageInfo | null;
+}
+
+export interface LeadValidationPipelineExecution {
+  stepA_TextModeration: StepATextModerationReport;
+  stepB_VisionAnalysis: StepBVisionAnalysisReport;
+  stepC_FinalEvaluation: StepCFinalEvaluationReport;
 }
 
 export interface LeadValidationAuditLog {
   ticketId: string;
   eventType: string;
   timestamp: string;
-  pipelineExecution: {
-    stepA_TextModeration: StepATextModerationReport;
-    stepB_VisionAnalysis: StepBVisionAnalysisReport;
-    stepC_FinalEvaluation: StepCFinalEvaluationReport;
-  };
+  pipelineExecution: LeadValidationPipelineExecution;
+  aiUsageSummary?: AiUsageSummaryReport;
 }
 
 // Annotation schema for LangGraph StateGraph
@@ -196,6 +212,10 @@ export const LeadValidatorStateAnnotation = Annotation.Root({
     reducer: (_current, update) => update,
     default: () => undefined,
   }),
+  evaluationModelUsed: Annotation<string | undefined>({
+    reducer: (_current, update) => update,
+    default: () => undefined,
+  }),
   finalReport: Annotation<ValidationReport | undefined>({
     reducer: (_current, update) => update,
     default: () => undefined,
@@ -215,5 +235,6 @@ export interface LeadValidatorState {
   textModelUsed?: string;
   visionAnalysisResult?: VisionAnalysisResult;
   visionModelUsed?: string;
+  evaluationModelUsed?: string;
   finalReport?: ValidationReport;
 }

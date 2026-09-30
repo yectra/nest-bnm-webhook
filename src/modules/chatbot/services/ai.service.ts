@@ -9,7 +9,14 @@ export class AIService {
   private readonly model: string;
 
   constructor(config: ConfigService) {
-    this.model = config.get<string>('OPENAI_MODEL') ?? 'gpt-4o';
+    const model =
+      config.get<string>('OPENAI_MODEL') ||
+      config.get<string>('azure.openaiModel');
+    if (!model) {
+      throw new Error('OPENAI_MODEL is required but not configured.');
+    }
+    this.model = model;
+    this.logger.log(`[AI MODEL] stage=chat model=${this.model}`);
     const timeout = config.get<number>('OPENAI_TIMEOUT_MS') ?? 20000;
 
     this.client = new OpenAI({
