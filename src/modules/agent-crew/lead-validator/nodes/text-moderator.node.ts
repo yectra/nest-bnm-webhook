@@ -16,7 +16,8 @@ export class TextModeratorNode {
     this.logger.debug(
       `Running TextModeratorNode for Ticket: ${state.ticketId}`,
     );
-    const modelUsed = this.llm.getModerationModelName();
+    const modelUsed = this.llm.getTextModelName();
+    this.logger.log(`[AI MODEL] stage=text model=${modelUsed}`);
 
     if (!state.userText || state.userText.trim().length === 0) {
       return {
@@ -43,6 +44,12 @@ export class TextModeratorNode {
         TEXT_MODERATOR_SYSTEM_PROMPT,
         userPrompt,
         modelUsed,
+        {
+          requestId: state.ticketId,
+          stage: 'text',
+          process: 'text_analysis',
+          modelEnv: 'OPENAI_TEXT_MODEL',
+        },
       );
 
       if (!result) {
@@ -68,7 +75,6 @@ export class TextModeratorNode {
             ? result.feasibilityScore
             : 7,
       };
-
       return {
         textModerationResult: normalizedResult,
         textModelUsed: modelUsed,

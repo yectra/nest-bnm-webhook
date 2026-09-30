@@ -22,10 +22,12 @@ import { SearchModule } from './modules/search/search.module';
 import { AgentCrewModule } from './modules/agent-crew/agent-crew.module';
 import { WhatsappAgentModule } from './modules/whatsapp-agent/whatsapp-agent.module';
 import { AuthModule } from './auth/auth.module';
+import { TelemetryModule } from './common/telemetry/telemetry.module';
 
 @Module({
 
   imports: [
+    TelemetryModule,
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
@@ -57,12 +59,21 @@ import { AuthModule } from './auth/auth.module';
         // https://<resource>.openai.azure.com/openai/v1/
         OPENAI_BASE_URL: Joi.string().uri().required(),
         OPENAI_API_KEY: Joi.string().min(1).required(),
+
+        // AI Model Roles - Authoritative and independently configurable
         OPENAI_MODEL: Joi.string().min(1).required(),
-        OPENAI_IMAGE_MODEL: Joi.string().optional(),
-        OPENAI_MODERATION_MODEL: Joi.string().optional(),
-        OPENAI_MODERATION_DEPLOYMENT: Joi.string().optional(),
+        OPENAI_TEXT_MODEL: Joi.string().min(1).required(),
+        OPENAI_IMAGE_MODEL: Joi.string().min(1).required(),
+        OPENAI_EVALUATION_MODEL: Joi.string().min(1).required(),
+        AGENT_CREW_MODEL: Joi.string().min(1).required(),
+        WHATSAPP_AGENT_LLM_MODEL: Joi.string().min(1).required(),
         // This must be the Azure deployment name, not just the base model name.
         EMBEDDING_MODEL: Joi.string().min(1).required(),
+
+        // Obsolete / Deprecated model configuration (retained for backward compatibility)
+        OPENAI_MODERATION_MODEL: Joi.string().optional(),
+        OPENAI_MODERATION_DEPLOYMENT: Joi.string().optional(),
+
         EMBEDDING_DIMENSIONS: Joi.number()
           .integer()
           .min(1)
@@ -80,11 +91,8 @@ import { AuthModule } from './auth/auth.module';
           .pattern(/^\//)
           .default('/id'),
         CHATBOT_VECTOR_TOP_K: Joi.number().integer().min(1).max(50).default(5),
-        // Agent crew (LangGraph): GPT-5 deployment name on Azure AI Foundry.
-        // Falls back to OPENAI_MODEL when not set.
-        AGENT_CREW_MODEL: Joi.string().min(1).optional(),
         AGENT_CREW_TOP_K: Joi.number().integer().min(1).max(50).default(5),
-        // Picture analysis (GPT-5 vision) is opt-in: the image agent never
+        // Picture analysis (vision) is opt-in: the image agent never
         // runs unless this is explicitly set to true.
         AGENT_CREW_IMAGE_AGENT_ENABLED: Joi.boolean().default(false),
         AGENT_CREW_MAX_IMAGES: Joi.number().integer().min(1).max(10).default(4),
@@ -100,7 +108,6 @@ import { AuthModule } from './auth/auth.module';
         // WhatsApp Agent LLM optional config
         WHATSAPP_AGENT_LLM_BASE_URL: Joi.string().uri().optional(),
         WHATSAPP_AGENT_LLM_API_KEY: Joi.string().optional(),
-        WHATSAPP_AGENT_LLM_MODEL: Joi.string().optional(),
         // LangSmith tracing for the deep agent. Without LANGSMITH_API_KEY no
         // trace is ever sent; the rest only shape where traces land.
         LANGSMITH_API_KEY: Joi.string().optional(),
@@ -122,6 +129,17 @@ import { AuthModule } from './auth/auth.module';
         AZURE_EVENT_GRID_REQUIRED_ROLE: Joi.string().optional(),
         AZURE_EVENT_GRID_TOPIC: Joi.string().optional(),
         AZURE_EVENT_GRID_ALLOWED_EVENT_TYPES: Joi.string().optional(),
+
+        // Configurable Business Event Grid Event Types
+        EVENT_GRID_EVENT_TYPES_REQUIREMENTS: Joi.string()
+          .min(1)
+          .default('POST_YOUR_REQUIREMENT,POST_YOUR_REQUIREMENTS'),
+        EVENT_GRID_EVENT_TYPES_QUOTES: Joi.string()
+          .min(1)
+          .default('QUOTE_CREATED_EVENT'),
+        EVENT_GRID_EVENT_TYPES_WHATSAPP: Joi.string()
+          .min(1)
+          .default('BNM_WHATSAPP_RECEIVED_FROM_JAVA_EVENT'),
       }),
     }),
 

@@ -58,13 +58,20 @@ export class EvaluatorNode {
           state.visionAnalysisResult,
         );
 
-        const model = this.llm.getModerationModelName();
+        const model = this.llm.getEvaluationModelName();
+        this.logger.log(`[AI MODEL] stage=evaluation model=${model}`);
         const llmResult =
           await this.llm.completeMultiModalJson<ServiceVerificationReport>(
             SERVICE_VERIFICATION_SYSTEM_PROMPT,
             userPrompt,
             state.mediaUrls || [],
             model,
+            {
+              requestId: state.ticketId,
+              stage: 'evaluation',
+              process: 'final_evaluation',
+              modelEnv: 'OPENAI_EVALUATION_MODEL',
+            },
           );
 
         if (llmResult && llmResult.status && llmResult.analysis_stages) {
@@ -84,6 +91,7 @@ export class EvaluatorNode {
           return {
             finalReport,
             catalogServices: catalog,
+            evaluationModelUsed: model,
           };
         }
       } catch (err: unknown) {
@@ -100,6 +108,7 @@ export class EvaluatorNode {
     return {
       finalReport,
       catalogServices: catalog,
+      evaluationModelUsed: this.llm ? this.llm.getEvaluationModelName() : undefined,
     };
   }
 

@@ -1,4 +1,4 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
 
 import { ConfigService } from '@nestjs/config';
 
@@ -6,12 +6,20 @@ import OpenAI from 'openai';
 
 @Injectable()
 export class AIService {
+  private readonly logger = new Logger(AIService.name);
   private readonly client: OpenAI;
 
   private readonly model: string;
 
   constructor(private readonly config: ConfigService) {
-    this.model = this.config.get<string>('OPENAI_MODEL')!;
+    const model =
+      this.config.get<string>('OPENAI_MODEL') ||
+      this.config.get<string>('azure.openaiModel');
+    if (!model) {
+      throw new Error('OPENAI_MODEL is required but not configured.');
+    }
+    this.model = model;
+    this.logger.log(`[AI MODEL] stage=chat model=${this.model}`);
 
     this.client = new OpenAI({
       baseURL: this.config.get<string>('OPENAI_BASE_URL'),

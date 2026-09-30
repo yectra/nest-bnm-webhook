@@ -28,6 +28,7 @@ export class EmbeddingService {
     config: ConfigService,
   ) {
     this.model = config.getOrThrow<string>('EMBEDDING_MODEL');
+    this.logger.log(`[AI MODEL] stage=embedding model=${this.model}`);
     this.dimensions = config.get<number>('EMBEDDING_DIMENSIONS') ?? 1536;
     this.maxCharsPerChunk =
       config.get<number>('EMBEDDING_MAX_CHARS_PER_CHUNK') ?? 6000;

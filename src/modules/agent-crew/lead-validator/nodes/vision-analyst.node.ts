@@ -16,7 +16,8 @@ export class VisionAnalystNode {
     this.logger.debug(
       `Running VisionAnalystNode for Ticket: ${state.ticketId}`,
     );
-    const modelUsed = this.llm.getModerationModelName();
+    const modelUsed = this.llm.getImageModelName();
+    this.logger.log(`[AI MODEL] stage=image model=${modelUsed}`);
 
     if (!state.mediaUrls || state.mediaUrls.length === 0) {
       return {
@@ -37,28 +38,44 @@ export class VisionAnalystNode {
     const urlsToProcess = state.mediaUrls.slice(0, maxImages);
 
     try {
-      const imageDescriptions = await Promise.all(
+      const userPrompt = `Declared Category: "${state.declaredCategory || 'None provided'}"
+User Requirement Text: "${state.userText || 'None provided'}"
+
+Analyze the visual evidence in this image against Brick N Mortar home-service reality and the declared category, then return the JSON.`;
+
+      const imageResults = await Promise.all(
         urlsToProcess.map(async (url, index) => {
           try {
-            const description = await this.llm.describeImage(
-              `Describe what is happening in this image. Is it relevant to residential/commercial construction, interior design, or home services?`,
-              url,
+            const result = await this.llm.completeMultiModalJson<VisionAnalysisResult>(
+              VISION_ANALYST_SYSTEM_PROMPT,
+              userPrompt,
+              [url],
               modelUsed,
+              {
+                requestId: state.ticketId,
+                stage: 'image',
+                process: 'vision_analysis',
+                modelEnv: 'OPENAI_IMAGE_MODEL',
+                callIndex: index + 1,
+              },
             );
-            return `Image ${index + 1}: ${description}`;
+            if (!result) {
+              throw new Error(`Failed to parse JSON for image ${index + 1}`);
+            }
+            return result;
           } catch (e: unknown) {
             const message = e instanceof Error ? e.message : String(e);
             this.logger.warn(`Failed to process image ${url}: ${message}`);
-            return `Image ${index + 1}: Failed to load or analyze.`;
+            return null;
           }
         }),
       );
 
-      const allFailed = imageDescriptions.every((desc) =>
-        desc.includes('Failed to load or analyze'),
+      const validResults = imageResults.filter(
+        (r): r is VisionAnalysisResult => r !== null,
       );
 
-      if (allFailed) {
+      if (validResults.length === 0) {
         this.logger.warn(
           `All images for ticket ${state.ticketId} failed to load or are private blobs inaccessible to Azure OpenAI. Skipping image penalty.`,
         );
@@ -75,33 +92,37 @@ export class VisionAnalystNode {
         };
       }
 
-      const aggregatedDescriptions = imageDescriptions.join('\n\n');
-
-      const userPrompt = `
-Declared Category: "${state.declaredCategory || 'None provided'}"
-
-Image Descriptions:
-${aggregatedDescriptions}
-
-Analyze the visual evidence against Brick N Mortar home-service reality and the declared category, then return the JSON.`;
-
-      const result = await this.llm.completeJson<VisionAnalysisResult>(
-        VISION_ANALYST_SYSTEM_PROMPT,
-        userPrompt,
-        modelUsed,
+      const allDetectedElements = Array.from(
+        new Set(validResults.flatMap((r) => r.detectedElements || [])),
+      );
+      const isHomeServiceSiteOrPlan = validResults.every(
+        (r) => r.isHomeServiceSiteOrPlan ?? true,
+      );
+      const isRealisticWorkSite = validResults.every(
+        (r) => r.isRealisticWorkSite ?? true,
       );
 
-      if (!result) {
-        throw new Error('LLM returned null or failed to parse JSON');
+      let visualRelevance: 'RELEVANT' | 'MISMATCHED' | 'ABSURD_OR_UNFEASIBLE' =
+        'RELEVANT';
+      if (validResults.some((r) => r.visualRelevance === 'ABSURD_OR_UNFEASIBLE')) {
+        visualRelevance = 'ABSURD_OR_UNFEASIBLE';
+      } else if (validResults.some((r) => r.visualRelevance === 'MISMATCHED')) {
+        visualRelevance = 'MISMATCHED';
       }
 
-      const visualRelevance = result.visualRelevance || 'RELEVANT';
+      const mismatchReasons = validResults
+        .map((r) => r.mismatchReason)
+        .filter(
+          (r): r is string => Boolean(r && r.trim().length > 0 && r !== 'None'),
+        );
+
       const normalizedResult: VisionAnalysisResult = {
-        detectedElements: result.detectedElements || [],
-        isHomeServiceSiteOrPlan: result.isHomeServiceSiteOrPlan ?? true,
-        isRealisticWorkSite: result.isRealisticWorkSite ?? true,
+        detectedElements: allDetectedElements,
+        isHomeServiceSiteOrPlan,
+        isRealisticWorkSite,
         visualRelevance,
-        mismatchReason: result.mismatchReason || null,
+        mismatchReason:
+          mismatchReasons.length > 0 ? mismatchReasons.join('; ') : null,
         isImageRelevant: visualRelevance === 'RELEVANT',
       };
 

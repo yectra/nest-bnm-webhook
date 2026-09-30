@@ -20,16 +20,69 @@ export interface EventEnvelope {
 export class EventGridEventValidator {
   private readonly logger = new Logger(EventGridEventValidator.name);
 
-  // Default recognized event types in the project
-  private static readonly DEFAULT_ALLOWED_EVENT_TYPES = [
-    'BNM_WHATSAPP_RECEIVED_FROM_JAVA_EVENT',
-    'POST_YOUR_REQUIREMENT',
-    'POST_YOUR_REQUIREMENTS',
-    'QUOTE_CREATED_EVENT',
-    'Microsoft.EventGrid.SubscriptionValidationEvent',
-  ];
+  /** Azure Event Grid infrastructure protocol handshake event constant */
+  public static readonly PROTOCOL_SUBSCRIPTION_VALIDATION_EVENT =
+    'Microsoft.EventGrid.SubscriptionValidationEvent';
 
   constructor(private readonly configService: ConfigService) {}
+
+  private parseEventTypes(raw?: string): Set<string> {
+    if (!raw) return new Set();
+    return new Set(
+      raw
+        .split(',')
+        .map((t) => t.trim())
+        .filter((t) => t.length > 0),
+    );
+  }
+
+  public getRequirementsEventTypes(): Set<string> {
+    const raw =
+      this.configService.get<string>('azure.eventGridEventTypesRequirements') ||
+      this.configService.get<string>('EVENT_GRID_EVENT_TYPES_REQUIREMENTS') ||
+      process.env.EVENT_GRID_EVENT_TYPES_REQUIREMENTS ||
+      'POST_YOUR_REQUIREMENT,POST_YOUR_REQUIREMENTS';
+    return this.parseEventTypes(raw);
+  }
+
+  public getQuotesEventTypes(): Set<string> {
+    const raw =
+      this.configService.get<string>('azure.eventGridEventTypesQuotes') ||
+      this.configService.get<string>('EVENT_GRID_EVENT_TYPES_QUOTES') ||
+      process.env.EVENT_GRID_EVENT_TYPES_QUOTES ||
+      'QUOTE_CREATED_EVENT';
+    return this.parseEventTypes(raw);
+  }
+
+  public getWhatsAppEventTypes(): Set<string> {
+    const raw =
+      this.configService.get<string>('azure.eventGridEventTypesWhatsApp') ||
+      this.configService.get<string>('EVENT_GRID_EVENT_TYPES_WHATSAPP') ||
+      process.env.EVENT_GRID_EVENT_TYPES_WHATSAPP ||
+      'BNM_WHATSAPP_RECEIVED_FROM_JAVA_EVENT';
+    return this.parseEventTypes(raw);
+  }
+
+  public getAllowedEventTypes(): Set<string> {
+    const customTypes =
+      this.configService.get<string>('azure.eventGridAllowedEventTypes') ||
+      this.configService.get<string>('AZURE_EVENT_GRID_ALLOWED_EVENT_TYPES') ||
+      process.env.AZURE_EVENT_GRID_ALLOWED_EVENT_TYPES;
+
+    if (customTypes) {
+      const set = this.parseEventTypes(customTypes);
+      set.add(EventGridEventValidator.PROTOCOL_SUBSCRIPTION_VALIDATION_EVENT);
+      return set;
+    }
+
+    const combined = new Set<string>([
+      ...this.getRequirementsEventTypes(),
+      ...this.getQuotesEventTypes(),
+      ...this.getWhatsAppEventTypes(),
+      EventGridEventValidator.PROTOCOL_SUBSCRIPTION_VALIDATION_EVENT,
+    ]);
+    return combined;
+  }
 
   /**
    * Validates incoming Event Grid request payload:
@@ -58,6 +111,8 @@ export class EventGridEventValidator {
       process.env.AZURE_EVENT_GRID_TOPIC;
 
     const allowedTypes = this.getAllowedEventTypes();
+    const whatsappTypes = this.getWhatsAppEventTypes();
+    const requirementsTypes = this.getRequirementsEventTypes();
 
     for (let i = 0; i < events.length; i++) {
       const event = events[i];
@@ -67,17 +122,17 @@ export class EventGridEventValidator {
         throw new BadRequestException(`Invalid Event Grid payload at index ${i}: event must be an object`);
       }
 
-      const eventType = event.eventType || event.eventName;
-      const eventId = event.id || event.eventId;
+      const eventType = (event.eventType || event.eventName || '').trim();
+      const eventId = (event.id || event.eventId || '').trim();
       const data = event.data || event.payload;
 
       // 1. Validate envelope required fields
-      if (!eventType || typeof eventType !== 'string' || eventType.trim() === '') {
+      if (!eventType) {
         this.logger.warn(`Event validation failed at index ${i}: missing eventType`);
         throw new BadRequestException(`Invalid Event Grid payload at index ${i}: missing required "eventType"`);
       }
 
-      if (!eventId || typeof eventId !== 'string' || eventId.trim() === '') {
+      if (!eventId) {
         this.logger.warn(`Event validation failed at index ${i}: missing id`);
         throw new BadRequestException(`Invalid Event Grid payload at index ${i}: missing required "id"`);
       }
@@ -88,7 +143,7 @@ export class EventGridEventValidator {
       }
 
       // 2. Validate subscription validation handshake event
-      if (eventType === 'Microsoft.EventGrid.SubscriptionValidationEvent') {
+      if (eventType === EventGridEventValidator.PROTOCOL_SUBSCRIPTION_VALIDATION_EVENT) {
         if (!data.validationCode || typeof data.validationCode !== 'string') {
           this.logger.warn(`Subscription validation event missing validationCode`);
           throw new BadRequestException('Invalid SubscriptionValidationEvent: missing validationCode in data');
@@ -97,7 +152,7 @@ export class EventGridEventValidator {
       }
 
       // 3. Validate allowed event types
-      if (!allowedTypes.includes(eventType)) {
+      if (!allowedTypes.has(eventType)) {
         this.logger.warn(`Event type "${eventType}" is not in allowed event types list`);
         throw new BadRequestException(`Unexpected Event Grid event type: "${eventType}" is not authorized`);
       }
@@ -111,18 +166,15 @@ export class EventGridEventValidator {
       }
 
       // 5. Validate specific Java event structure
-      if (eventType === 'BNM_WHATSAPP_RECEIVED_FROM_JAVA_EVENT') {
+      if (whatsappTypes.has(eventType)) {
         // Ensure data contains message content or messageId
         if (Object.keys(data).length === 0) {
           this.logger.warn('Java WhatsApp event contains empty data payload');
-          throw new BadRequestException('Invalid BNM_WHATSAPP_RECEIVED_FROM_JAVA_EVENT: data object cannot be empty');
+          throw new BadRequestException(`Invalid ${eventType}: data object cannot be empty`);
         }
       }
 
-      if (
-        eventType === 'POST_YOUR_REQUIREMENTS' ||
-        eventType === 'POST_YOUR_REQUIREMENT'
-      ) {
+      if (requirementsTypes.has(eventType)) {
         if (Object.keys(data).length === 0) {
           this.logger.warn(`${eventType} event contains empty data payload`);
           throw new BadRequestException(`Invalid ${eventType} event: data object cannot be empty`);
@@ -131,21 +183,5 @@ export class EventGridEventValidator {
     }
 
     return events;
-  }
-
-  private getAllowedEventTypes(): string[] {
-    const customTypes =
-      this.configService.get<string>('azure.eventGridAllowedEventTypes') ||
-      this.configService.get<string>('AZURE_EVENT_GRID_ALLOWED_EVENT_TYPES') ||
-      process.env.AZURE_EVENT_GRID_ALLOWED_EVENT_TYPES;
-
-    if (customTypes) {
-      return customTypes
-        .split(',')
-        .map((t) => t.trim())
-        .filter((t) => t.length > 0);
-    }
-
-    return EventGridEventValidator.DEFAULT_ALLOWED_EVENT_TYPES;
   }
 }

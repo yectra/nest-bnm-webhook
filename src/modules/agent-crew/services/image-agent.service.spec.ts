@@ -4,13 +4,16 @@ import { CosmosRepository } from '../../chatbot/repositories/cosmos.repository';
 import { CrewLlmProvider } from './crew-llm.provider';
 
 describe('ImageAgentService', () => {
-  const buildService = (imageAgentEnabled: unknown) => {
+  const buildService = (
+    imageAgentEnabled: unknown,
+    imageModel: string | null = 'gpt-5-mini',
+  ) => {
     const config = {
-      get: jest.fn((key: string) =>
-        key === 'AGENT_CREW_IMAGE_AGENT_ENABLED'
-          ? imageAgentEnabled
-          : undefined,
-      ),
+      get: jest.fn((key: string) => {
+        if (key === 'AGENT_CREW_IMAGE_AGENT_ENABLED') return imageAgentEnabled;
+        if (key === 'OPENAI_IMAGE_MODEL') return imageModel ?? undefined;
+        return undefined;
+      }),
     } as unknown as ConfigService;
     return new ImageAgentService(
       {} as CosmosRepository,
@@ -18,6 +21,12 @@ describe('ImageAgentService', () => {
       config,
     );
   };
+
+  it('fails fast if OPENAI_IMAGE_MODEL is missing', () => {
+    expect(() => buildService(false, null)).toThrow(
+      'OPENAI_IMAGE_MODEL is required but not configured.',
+    );
+  });
 
   it('is disabled by default', () => {
     expect(buildService(undefined).enabled()).toBe(false);
