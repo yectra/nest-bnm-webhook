@@ -23,8 +23,8 @@ export default registerAs('whatsappAgent', () => ({
     /** OpenAI-compatible base URL of a LOW-COST endpoint. Unset = no LLM. */
     baseUrl: process.env.WHATSAPP_AGENT_LLM_BASE_URL || undefined,
     apiKey: process.env.WHATSAPP_AGENT_LLM_API_KEY || undefined,
-    /** Frontier models are never required. */
-    model: process.env.WHATSAPP_AGENT_LLM_MODEL || 'gpt-5-mini',
+    /** Configured model deployment name. */
+    model: process.env.WHATSAPP_AGENT_LLM_MODEL || undefined,
   },
   langsmith: {
     /**

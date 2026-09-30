@@ -53,6 +53,7 @@ describe('LeadValidatorService', () => {
       declaredCategory: 'Interior Design',
       textModelUsed: 'gpt-5-mini',
       visionModelUsed: 'gpt-5-mini',
+      evaluationModelUsed: 'gpt-5-mini',
       textModerationResult: {
         isClean: true,
         profanitiesOrViolations: [],
@@ -173,6 +174,7 @@ describe('LeadValidatorService', () => {
             inferredCategory: 'Interior Design',
             reasoning: 'Standard interior service within BNM scope',
           },
+          aiUsage: null,
         },
         stepB_VisionAnalysis: {
           agentName: 'VisionAnalystAgent',
@@ -188,9 +190,11 @@ describe('LeadValidatorService', () => {
             visualRelevance: 'RELEVANT',
             mismatchReason: null,
           },
+          aiUsage: null,
         },
         stepC_FinalEvaluation: {
           agentName: 'EvaluatorAgent',
+          modelUsed: 'gpt-5-mini',
           purpose:
             'Consolidates findings from Step A and Step B to generate the final audit status',
           overallDecision: 'MATCHED',
@@ -198,6 +202,7 @@ describe('LeadValidatorService', () => {
           flagsRaised: [],
           summary:
             'User text and visual evidence perfectly align with declared Interior Design category.',
+          aiUsage: null,
         },
       },
     });
@@ -532,6 +537,130 @@ describe('LeadValidatorService', () => {
     expect(parsed.pipelineExecution.stepC_FinalEvaluation.flagsRaised).toContain(
       'NON_WORK_SITE_IMAGE: Image depicts a car, not a painting work site',
     );
+  });
+
+  it('should propagate recorded AI usage telemetry into final report and aiUsageSummary', async () => {
+    const telemetryService = new (require('../../../common/telemetry/ai-usage-telemetry.service').AiUsageTelemetryService)();
+    
+    // Simulate telemetry records from 3 pipeline calls
+    telemetryService.recordUsage({
+      requestId: 'ticket-telemetry-test',
+      stage: 'text',
+      process: 'text_analysis',
+      provider: 'azure-openai',
+      model: 'gpt-5-mini',
+      modelEnv: 'OPENAI_TEXT_MODEL',
+      inputTokens: 100,
+      outputTokens: 50,
+      latencyMs: 500,
+      success: true,
+    });
+
+    telemetryService.recordUsage({
+      requestId: 'ticket-telemetry-test',
+      stage: 'image',
+      process: 'vision_analysis',
+      provider: 'azure-openai',
+      model: 'gpt-5-mini',
+      modelEnv: 'OPENAI_IMAGE_MODEL',
+      inputTokens: 200,
+      outputTokens: 100,
+      latencyMs: 800,
+      success: true,
+    });
+
+    telemetryService.recordUsage({
+      requestId: 'ticket-telemetry-test',
+      stage: 'evaluation',
+      process: 'final_evaluation',
+      provider: 'azure-openai',
+      model: 'gpt-5-mini',
+      modelEnv: 'OPENAI_EVALUATION_MODEL',
+      inputTokens: 300,
+      outputTokens: 150,
+      latencyMs: 1200,
+      success: true,
+    });
+
+    const mockInvokeResult: LeadValidatorState = {
+      ticketId: 'ticket-telemetry-test',
+      eventType: 'POST_YOUR_REQUIREMENT',
+      userText: 'Need 2 bedrooms painted',
+      mediaUrls: ['https://example.com/wall.jpg'],
+      declaredCategory: 'Painting',
+      textModelUsed: 'gpt-5-mini',
+      visionModelUsed: 'gpt-5-mini',
+      evaluationModelUsed: 'gpt-5-mini',
+      textModerationResult: {
+        isClean: true,
+        domainCategory: 'IN_SCOPE_LEGITIMATE',
+        inferredCategory: 'Painting',
+        feasibilityScore: 9,
+      },
+      visionAnalysisResult: {
+        detectedElements: ['wall paint'],
+        isHomeServiceSiteOrPlan: true,
+        isRealisticWorkSite: true,
+        visualRelevance: 'RELEVANT',
+        isImageRelevant: true,
+      },
+      finalReport: {
+        status: 'MATCHED',
+        confidence_score: 0.9,
+        analysis_stages: {
+          stage_1_text_summary: { identified_intent: 'Painting', extracted_keywords: ['Painting'], text_validity: 'VALID' },
+          stage_2_visual_summary: { total_images_analyzed: 1, image_breakdown: [], visual_consistency_verdict: 'CONSISTENT' },
+          stage_3_verification_notes: 'Verified',
+        },
+        matched_services: [],
+        rejection_details: { is_rejected: false, reason_category: null, explanation: null },
+        recommended_action: 'ROUTE_TO_SERVICE',
+        legacyStatus: 'APPROVED',
+        flags: [],
+        summary: 'Verified',
+        timestamp: '2026-09-30T10:00:00.000Z',
+      },
+    };
+
+    const mockGraph = {
+      invoke: jest.fn().mockResolvedValue(mockInvokeResult),
+    };
+
+    mockGraphFactory = {
+      build: jest.fn().mockReturnValue(mockGraph),
+    } as unknown as jest.Mocked<LeadValidatorGraphFactory>;
+
+    service = new LeadValidatorService(
+      mockGraphFactory,
+      mockMediaPreprocessor,
+      mockCatalogFetcher,
+      undefined,
+      telemetryService,
+    );
+
+    const report = await service.validateLead({
+      ticketId: 'ticket-telemetry-test',
+      userText: 'Need 2 bedrooms painted',
+      mediaUrls: ['https://example.com/wall.jpg'],
+      declaredCategory: 'Painting',
+    });
+
+    expect(report.pipelineExecution).toBeDefined();
+    expect(report.pipelineExecution?.stepA_TextModeration.aiUsage?.inputTokens).toBe(100);
+    expect(report.pipelineExecution?.stepB_VisionAnalysis.aiUsage?.inputTokens).toBe(200);
+    expect(report.pipelineExecution?.stepC_FinalEvaluation.aiUsage?.inputTokens).toBe(300);
+
+    expect(report.aiUsageSummary).toBeDefined();
+    expect(report.aiUsageSummary?.totalCalls).toBe(3);
+    expect(report.aiUsageSummary?.totalInputTokens).toBe(600);
+    expect(report.aiUsageSummary?.totalOutputTokens).toBe(300);
+    expect(report.aiUsageSummary?.totalTokens).toBe(900);
+    expect(report.aiUsageSummary?.totalLatencyMs).toBe(2500);
+
+    expect(report.aiUsageSummary?.byStage.text.calls).toBe(1);
+    expect(report.aiUsageSummary?.byStage.image.calls).toBe(1);
+    expect(report.aiUsageSummary?.byStage.evaluation.calls).toBe(1);
+    expect(report.aiUsageSummary?.byModel['gpt-5-mini'].calls).toBe(3);
   });
 });
 

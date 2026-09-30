@@ -14,7 +14,15 @@ export class EmbeddingService {
   private readonly dimensions: number;
 
   constructor(config: ConfigService) {
-    this.model = config.get<string>('EMBEDDING_MODEL') ?? 'text-embedding-3-small';
+    const model =
+      config.get<string>('EMBEDDING_MODEL') ||
+      config.get<string>('azure.embeddingModel') ||
+      config.get<string>('azure.openaiEmbeddingDeployment');
+    if (!model) {
+      throw new Error('EMBEDDING_MODEL is required but not configured.');
+    }
+    this.model = model;
+    this.logger.log(`[AI MODEL] stage=embedding model=${this.model}`);
     this.dimensions = config.get<number>('EMBEDDING_DIMENSIONS') ?? 1536;
     const timeout = config.get<number>('OPENAI_TIMEOUT_MS') ?? 15000;
 
