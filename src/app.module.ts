@@ -23,9 +23,9 @@ import { AgentCrewModule } from './modules/agent-crew/agent-crew.module';
 import { WhatsappAgentModule } from './modules/whatsapp-agent/whatsapp-agent.module';
 import { AuthModule } from './auth/auth.module';
 import { TelemetryModule } from './common/telemetry/telemetry.module';
+import { ConsulModule } from './modules/consul/consul.module';
 
 @Module({
-
   imports: [
     TelemetryModule,
     ConfigModule.forRoot({
@@ -140,6 +140,25 @@ import { TelemetryModule } from './common/telemetry/telemetry.module';
         EVENT_GRID_EVENT_TYPES_WHATSAPP: Joi.string()
           .min(1)
           .default('BNM_WHATSAPP_RECEIVED_FROM_JAVA_EVENT'),
+
+        // HashiCorp Consul Configuration
+        CONSUL_ENABLED: Joi.boolean().default(false),
+        CONSUL_HTTP_ADDR: Joi.string().uri().default('http://127.0.0.1:8500'),
+        CONSUL_HTTP_TOKEN: Joi.string().optional(),
+        CONSUL_SERVICE_ID: Joi.string()
+          .min(1)
+          .default('bricknmortar-nestjs-api-1'),
+        CONSUL_SERVICE_NAME: Joi.string()
+          .min(1)
+          .default('bricknmortar-nestjs-api'),
+        CONSUL_SERVICE_ADDRESS: Joi.string().default('127.0.0.1'),
+        CONSUL_REQUIRED: Joi.boolean().default(false),
+        CONSUL_DEREGISTER_CRITICAL_AFTER: Joi.string().default('1m'),
+
+        // Java Microservice Service Discovery (bnm-service)
+        BNM_CATALOG_SERVICE_NAME: Joi.string().default('bnm-service'),
+        BNM_CATALOG_SERVICE_PATH: Joi.string().default('/service'),
+        BNM_CATALOG_SERVICE_URL: Joi.string().uri().optional(),
       }),
     }),
 
@@ -163,6 +182,7 @@ import { TelemetryModule } from './common/telemetry/telemetry.module';
 
     AgentCrewModule,
     WhatsappAgentModule,
+    ConsulModule,
   ],
 
   providers: [

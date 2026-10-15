@@ -7,8 +7,10 @@ import { LeadValidatorService } from './lead-validator.service';
 import { CrewLlmProvider } from '../services/crew-llm.provider';
 import { MediaPreprocessorService } from './services/media-preprocessor.service';
 import { CatalogFetcherService } from './services/catalog-fetcher.service';
+import { ConsulModule } from '../../consul/consul.module';
 
 @Module({
+  imports: [ConsulModule],
   providers: [
     CatalogFetcherService,
     MediaPreprocessorService,
@@ -19,6 +21,10 @@ import { CatalogFetcherService } from './services/catalog-fetcher.service';
     LeadValidatorService,
     CrewLlmProvider,
   ],
-  exports: [LeadValidatorService, MediaPreprocessorService, CatalogFetcherService],
+  exports: [
+    LeadValidatorService,
+    MediaPreprocessorService,
+    CatalogFetcherService,
+  ],
 })
 export class LeadValidatorModule {}

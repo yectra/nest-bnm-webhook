@@ -1,6 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
+import { ConsulHttpClientService } from '../../../../modules/consul/consul-http-client.service';
 
 export interface CatalogCategory {
   id?: string;
@@ -95,7 +96,12 @@ export const FALLBACK_CATALOG_SERVICES: CatalogServiceItem[] = [
     category: { name: 'RO & Water Softener' },
     description:
       'Comprehensive RO water purifiers and domestic/commercial water softeners ensuring clean and pure water supply.',
-    keyFeatures: ['Durable', 'Water resistant', 'Affordable', 'Easy Maintenance'],
+    keyFeatures: [
+      'Durable',
+      'Water resistant',
+      'Affordable',
+      'Easy Maintenance',
+    ],
   },
   {
     id: '25777757-71a7-4d50-8a47-873fafb1233b',
@@ -267,14 +273,32 @@ export const FALLBACK_CATALOG_SERVICES: CatalogServiceItem[] = [
 export class CatalogFetcherService {
   private readonly logger = new Logger(CatalogFetcherService.name);
   private readonly endpoint: string;
+  private readonly serviceName: string;
+  private readonly servicePath: string;
+  private readonly isConsulEnabled: boolean;
   private cachedServices: CatalogServiceItem[] | null = null;
   private lastFetchTime = 0;
   private readonly ttlMs = 10 * 60 * 1000; // 10 minutes cache TTL
 
-  constructor(config: ConfigService) {
+  constructor(
+    config: ConfigService,
+    @Optional() private readonly consulHttpClient?: ConsulHttpClientService,
+  ) {
     this.endpoint =
       config.get<string>('BNM_CATALOG_SERVICE_URL') ??
       'https://bnm-api-dev.azure-api.net/bnm-service/service';
+    this.serviceName =
+      config.get<string>('BNM_CATALOG_SERVICE_NAME') ?? 'bnm-service';
+    this.servicePath =
+      config.get<string>('BNM_CATALOG_SERVICE_PATH') ?? '/service';
+
+    const consulFlag =
+      config.get<boolean | string>('CONSUL_ENABLED') ??
+      process.env.CONSUL_ENABLED;
+    this.isConsulEnabled =
+      typeof consulFlag === 'boolean'
+        ? consulFlag
+        : String(consulFlag).toLowerCase() === 'true';
   }
 
   /**
@@ -287,9 +311,55 @@ export class CatalogFetcherService {
       return this.cachedServices;
     }
 
+    // 1. Dynamic Consul Service Discovery if enabled and client is provided
+    if (this.isConsulEnabled && this.consulHttpClient) {
+      try {
+        this.logger.debug(
+          `Attempting to discover '${this.serviceName}' via Consul and fetch catalog from ${this.servicePath}...`,
+        );
+        const data = await this.consulHttpClient.get<CatalogServiceItem[]>(
+          this.serviceName,
+          this.servicePath,
+        );
+
+        if (Array.isArray(data) && data.length > 0) {
+          this.cachedServices = data.map((item) => ({
+            id: item.id,
+            name: item.name,
+            category: item.category
+              ? {
+                  id: item.category.id,
+                  name: item.category.name,
+                  description: item.category.description,
+                }
+              : undefined,
+            description: item.description,
+            keyFeatures: Array.isArray(item.keyFeatures)
+              ? item.keyFeatures
+              : [],
+          }));
+          this.lastFetchTime = now;
+          this.logger.log(
+            `Successfully discovered and fetched ${this.cachedServices.length} services from live Java service '${this.serviceName}' via Consul.`,
+          );
+          return this.cachedServices;
+        }
+
+        this.logger.warn(
+          `Consul call to '${this.serviceName}' returned an empty array. Falling back to static endpoint.`,
+        );
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        this.logger.warn(
+          `Consul discovery/call for '${this.serviceName}' failed: ${msg}. Falling back to static endpoint ${this.endpoint}.`,
+        );
+      }
+    }
+
+    // 2. Direct endpoint fallback
     try {
       this.logger.debug(
-        `Fetching live service catalog from ${this.endpoint}...`,
+        `Fetching live service catalog from static endpoint ${this.endpoint}...`,
       );
       const response = await axios.get<CatalogServiceItem[]>(this.endpoint, {
         timeout: 8000,
@@ -327,7 +397,7 @@ export class CatalogFetcherService {
       );
     }
 
-    // Return cached if available, otherwise built-in fallback
+    // 3. Built-in catalog fallback
     if (!this.cachedServices) {
       this.cachedServices = FALLBACK_CATALOG_SERVICES;
       this.lastFetchTime = now;
@@ -343,7 +413,9 @@ export class CatalogFetcherService {
     return services
       .map((s, index) => {
         const cat = s.category?.name || 'Unspecified';
-        const desc = s.description ? s.description.replace(/\s+/g, ' ').trim() : 'N/A';
+        const desc = s.description
+          ? s.description.replace(/\s+/g, ' ').trim()
+          : 'N/A';
         const features =
           s.keyFeatures && s.keyFeatures.length > 0
             ? s.keyFeatures.slice(0, 5).join(', ')

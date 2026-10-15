@@ -1,9 +1,11 @@
+/* eslint-disable @typescript-eslint/unbound-method */
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import {
   CatalogFetcherService,
   FALLBACK_CATALOG_SERVICES,
 } from './catalog-fetcher.service';
+import { ConsulHttpClientService } from '../../../../modules/consul/consul-http-client.service';
 
 jest.mock('axios');
 const mockedAxios = axios as jest.Mocked<typeof axios>;
@@ -11,6 +13,7 @@ const mockedAxios = axios as jest.Mocked<typeof axios>;
 describe('CatalogFetcherService', () => {
   let service: CatalogFetcherService;
   let mockConfig: jest.Mocked<ConfigService>;
+  let mockConsulHttpClient: jest.Mocked<ConsulHttpClientService>;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -19,52 +22,120 @@ describe('CatalogFetcherService', () => {
         if (key === 'BNM_CATALOG_SERVICE_URL') {
           return 'https://bnm-api-dev.azure-api.net/bnm-service/service';
         }
+        if (key === 'BNM_CATALOG_SERVICE_NAME') {
+          return 'bnm-service';
+        }
+        if (key === 'BNM_CATALOG_SERVICE_PATH') {
+          return '/service';
+        }
+        if (key === 'CONSUL_ENABLED') {
+          return true;
+        }
         return undefined;
       }),
     } as unknown as jest.Mocked<ConfigService>;
 
-    service = new CatalogFetcherService(mockConfig);
+    mockConsulHttpClient = {
+      get: jest.fn(),
+    } as unknown as jest.Mocked<ConsulHttpClientService>;
+
+    service = new CatalogFetcherService(mockConfig, mockConsulHttpClient);
   });
 
-  it('should fetch and parse catalog items from live API', async () => {
-    const mockData = [
+  it('should fetch catalog items dynamically via Consul service discovery when enabled', async () => {
+    const mockDiscoveredCatalog = [
       {
-        id: 'mock-1',
-        name: 'Mock Service',
-        category: { name: 'Mock Category' },
-        description: 'Mock Description',
-        keyFeatures: ['Feature 1', 'Feature 2'],
+        id: 'java-svc-1',
+        name: 'Dynamic Construction Service',
+        category: { name: 'Construction' },
+        description: 'Discovered via Consul from Java microservice',
+        keyFeatures: ['Feature A', 'Feature B'],
       },
     ];
 
-    mockedAxios.get.mockResolvedValueOnce({ data: mockData });
+    mockConsulHttpClient.get.mockResolvedValueOnce(mockDiscoveredCatalog);
 
     const result = await service.fetchCatalog();
-    expect(mockedAxios.get).toHaveBeenCalledTimes(1);
+
+    expect(mockConsulHttpClient.get).toHaveBeenCalledTimes(1);
+    expect(mockConsulHttpClient.get).toHaveBeenCalledWith(
+      'bnm-service',
+      '/service',
+    );
+    expect(mockedAxios.get).not.toHaveBeenCalled();
     expect(result).toHaveLength(1);
-    expect(result[0].id).toBe('mock-1');
-    expect(result[0].name).toBe('Mock Service');
+    expect(result[0].id).toBe('java-svc-1');
+    expect(result[0].name).toBe('Dynamic Construction Service');
   });
 
-  it('should use in-memory cache on second fetch within TTL', async () => {
-    const mockData = [
+  it('should fall back to static API endpoint when Consul discovery finds no healthy instances', async () => {
+    mockConsulHttpClient.get.mockRejectedValueOnce(
+      new Error('No healthy instances found for bnm-service'),
+    );
+
+    const mockAxiosData = [
       {
-        id: 'mock-1',
-        name: 'Mock Service',
+        id: 'static-1',
+        name: 'Static Endpoint Service',
+        category: { name: 'Static Category' },
+        description: 'Fetched from static fallback endpoint',
+        keyFeatures: ['Feature X'],
       },
     ];
 
-    mockedAxios.get.mockResolvedValueOnce({ data: mockData });
+    mockedAxios.get.mockResolvedValueOnce({ data: mockAxiosData });
+
+    const result = await service.fetchCatalog();
+
+    expect(mockConsulHttpClient.get).toHaveBeenCalledTimes(1);
+    expect(mockedAxios.get).toHaveBeenCalledTimes(1);
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('static-1');
+  });
+
+  it('should fall back to static API when Consul call returns empty array', async () => {
+    mockConsulHttpClient.get.mockResolvedValueOnce([]);
+
+    const mockAxiosData = [
+      {
+        id: 'static-2',
+        name: 'Fallback Service',
+      },
+    ];
+
+    mockedAxios.get.mockResolvedValueOnce({ data: mockAxiosData });
+
+    const result = await service.fetchCatalog();
+
+    expect(mockConsulHttpClient.get).toHaveBeenCalledTimes(1);
+    expect(mockedAxios.get).toHaveBeenCalledTimes(1);
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('static-2');
+  });
+
+  it('should use in-memory cache on second fetch within TTL without re-querying Consul', async () => {
+    const mockData = [
+      {
+        id: 'mock-1',
+        name: 'Cached Service',
+      },
+    ];
+
+    mockConsulHttpClient.get.mockResolvedValueOnce(mockData);
 
     const first = await service.fetchCatalog();
     const second = await service.fetchCatalog();
 
-    expect(mockedAxios.get).toHaveBeenCalledTimes(1);
+    expect(mockConsulHttpClient.get).toHaveBeenCalledTimes(1);
+    expect(mockedAxios.get).not.toHaveBeenCalled();
     expect(first).toBe(second);
   });
 
-  it('should fall back to FALLBACK_CATALOG_SERVICES when API call fails', async () => {
-    mockedAxios.get.mockRejectedValueOnce(new Error('Network timeout'));
+  it('should fall back to FALLBACK_CATALOG_SERVICES when both Consul and static API fail', async () => {
+    mockConsulHttpClient.get.mockRejectedValueOnce(
+      new Error('Consul cluster down'),
+    );
+    mockedAxios.get.mockRejectedValueOnce(new Error('Static endpoint timeout'));
 
     const result = await service.fetchCatalog();
     expect(result).toEqual(FALLBACK_CATALOG_SERVICES);

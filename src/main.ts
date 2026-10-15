@@ -5,6 +5,7 @@ import { urlencoded } from 'express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 import { AppModule } from './app.module';
+import { ConsulRegistrationService } from './modules/consul/registration.service';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -45,6 +46,10 @@ async function bootstrap() {
   }
 
   await app.listen(process.env.PORT || 3000);
+
+  // Register only after the HTTP server is listening.
+  const consul = app.get(ConsulRegistrationService);
+  await consul.register();
 }
 
 void bootstrap();
