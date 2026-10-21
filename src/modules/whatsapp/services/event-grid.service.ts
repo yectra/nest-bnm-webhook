@@ -3,6 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { PostYourRequirementsAgentService } from '../../whatsapp-agent/services/post-your-requirements-agent.service';
 import { RequestAQuoteAgentService } from '../../whatsapp-agent/services/request-a-quote-agent.service';
 import { LeadValidatorService } from '../../agent-crew/lead-validator/lead-validator.service';
+import { TokenBudgetService } from '../../token-budget/token-budget.service';
+import { WhatsAppSenderPolicyService } from '../../token-budget/whatsapp-sender-policy.service';
 
 export interface EventGridEvent<T = any> {
   id?: string;
@@ -41,6 +43,8 @@ export class EventGridService {
     @Inject(forwardRef(() => RequestAQuoteAgentService))
     private readonly requestAQuoteAgentService?: RequestAQuoteAgentService,
     @Optional() private readonly leadValidatorService?: LeadValidatorService,
+    @Optional() private readonly tokenBudgetService?: TokenBudgetService,
+    @Optional() private readonly senderPolicyService?: WhatsAppSenderPolicyService,
   ) {}
 
   public getRequirementsEventTypes(): Set<string> {
@@ -94,6 +98,51 @@ export class EventGridService {
       if (eventType === EventGridService.PROTOCOL_SUBSCRIPTION_VALIDATION_EVENT) {
         this.logger.log(`[EVENT] type=${eventType} handler=SubscriptionValidation`);
         return this.handleSubscriptionValidation(event);
+      }
+
+      const isAiWorkflowEvent =
+        reqTypes.has(eventType) ||
+        quoteTypes.has(eventType) ||
+        whatsappTypes.has(eventType);
+
+      if (isAiWorkflowEvent) {
+        // 1. WhatsApp sender policy check
+        if (this.senderPolicyService) {
+          const rawSender = this.senderPolicyService.extractSenderFromPayload(event);
+          const senderCheck = this.senderPolicyService.validateSender(rawSender);
+          if (!senderCheck.allowed) {
+            this.logger.warn(
+              `AI_SENDER_NOT_ALLOWED: sender rejected (${senderCheck.maskedSender}); event skipped. eventId=${eventId}, eventType=${eventType}, reason=${senderCheck.reason}`,
+            );
+            results.push({
+              status: 'skipped',
+              reason: 'AI_SENDER_NOT_ALLOWED',
+              eventId,
+              eventType,
+              detail: senderCheck.reason,
+            });
+            continue;
+          }
+        }
+
+        // 2. Token budget check
+        if (this.tokenBudgetService) {
+          const budgetCheck = await this.tokenBudgetService.checkBudgetAvailable(500);
+          if (!budgetCheck.allowed) {
+            this.logger.warn(
+              `AI_TOKEN_BUDGET_EXHAUSTED: rolling 24-hour token limit reached; event skipped. eventId=${eventId}, eventType=${eventType}, remaining=${budgetCheck.remainingTokens}, limit=${budgetCheck.limit}`,
+            );
+            results.push({
+              status: 'skipped',
+              reason: 'AI_TOKEN_BUDGET_EXHAUSTED',
+              eventId,
+              eventType,
+              limit: budgetCheck.limit,
+              remainingTokens: budgetCheck.remainingTokens,
+            });
+            continue;
+          }
+        }
       }
 
       if (reqTypes.has(eventType)) {

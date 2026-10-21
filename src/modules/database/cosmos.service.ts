@@ -60,4 +60,18 @@ export class CosmosService {
     );
     return container;
   }
+
+  async ensureContainer(
+    containerName: string,
+    partitionKeyPath: string = '/pk',
+  ): Promise<Container> {
+    const { container } = await this.database.containers.createIfNotExists({
+      id: containerName,
+      partitionKey: { paths: [partitionKeyPath] },
+    });
+    this.logger.log(
+      `Container ready: "${containerName}" (pk: ${partitionKeyPath})`,
+    );
+    return container;
+  }
 }

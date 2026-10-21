@@ -23,11 +23,13 @@ import { AgentCrewModule } from './modules/agent-crew/agent-crew.module';
 import { WhatsappAgentModule } from './modules/whatsapp-agent/whatsapp-agent.module';
 import { AuthModule } from './auth/auth.module';
 import { TelemetryModule } from './common/telemetry/telemetry.module';
+import { TokenBudgetModule } from './modules/token-budget/token-budget.module';
 
 @Module({
 
   imports: [
     TelemetryModule,
+    TokenBudgetModule,
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
@@ -140,6 +142,25 @@ import { TelemetryModule } from './common/telemetry/telemetry.module';
         EVENT_GRID_EVENT_TYPES_WHATSAPP: Joi.string()
           .min(1)
           .default('BNM_WHATSAPP_RECEIVED_FROM_JAVA_EVENT'),
+
+        // Global AI token budget & WhatsApp sender access control
+        AI_TOKEN_BUDGET_ENABLED: Joi.boolean().default(true),
+        AI_TOKEN_BUDGET_LIMIT: Joi.number().integer().min(1).default(10000),
+        AI_TOKEN_BUDGET_WINDOW_HOURS: Joi.number()
+          .integer()
+          .min(1)
+          .max(168)
+          .default(24),
+        AI_TOKEN_BUDGET_SENDER_MODE: Joi.string()
+          .valid('allowlist', 'all')
+          .default('allowlist'),
+        AI_TOKEN_BUDGET_ALLOWED_WHATSAPP_NUMBERS: Joi.string()
+          .allow('')
+          .optional(),
+        AI_TOKEN_BUDGET_MANUAL_RESET_ENABLED: Joi.boolean().default(false),
+        AI_TOKEN_BUDGET_CONTAINER_NAME: Joi.string()
+          .min(1)
+          .default('ai-token-budget'),
       }),
     }),
 

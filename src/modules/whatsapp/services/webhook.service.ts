@@ -1,13 +1,19 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Request } from 'express';
 import { twiml, validateRequest } from 'twilio';
+import { WhatsAppSenderPolicyService } from '../../token-budget/whatsapp-sender-policy.service';
+import { TokenBudgetService } from '../../token-budget/token-budget.service';
 
 @Injectable()
 export class WebhookService {
   private readonly logger = new Logger(WebhookService.name);
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    @Optional() private readonly senderPolicyService?: WhatsAppSenderPolicyService,
+    @Optional() private readonly tokenBudgetService?: TokenBudgetService,
+  ) {}
 
   private getRequestUrl(request: Request) {
     const forwardedProto = request.get('x-forwarded-proto');
@@ -48,7 +54,7 @@ export class WebhookService {
     }
   }
 
-  receive(request: Request, body?: Record<string, string>) {
+  async receive(request: Request, body?: Record<string, string>) {
     if (!body || Object.keys(body).length === 0) {
       throw new BadRequestException(
         'Webhook payload is missing. Send x-www-form-urlencoded fields like Body, From, and ProfileName.',
@@ -57,12 +63,40 @@ export class WebhookService {
 
     this.validateTwilioRequest(request, body);
 
-    const { Body, ProfileName } = body;
+    const { Body, ProfileName, From } = body;
+    const response = new twiml.MessagingResponse();
+
+    // 1. WhatsApp sender policy check
+    if (this.senderPolicyService) {
+      const senderCheck = this.senderPolicyService.validateSender(From);
+      if (!senderCheck.allowed) {
+        this.logger.warn(
+          `AI_SENDER_NOT_ALLOWED: sender rejected (${senderCheck.maskedSender}); event skipped. Reason: ${senderCheck.reason}`,
+        );
+        return {
+          xml: response.toString(),
+        };
+      }
+    }
+
+    // 2. Token budget availability check
+    if (this.tokenBudgetService) {
+      const budgetCheck = await this.tokenBudgetService.checkBudgetAvailable(500);
+      if (!budgetCheck.allowed) {
+        this.logger.warn(
+          `AI_TOKEN_BUDGET_EXHAUSTED: rolling 24-hour token limit reached; event skipped. sender=${
+            From ? this.senderPolicyService?.maskPhoneNumber(From) : 'unknown'
+          }, remaining=${budgetCheck.remainingTokens}, limit=${budgetCheck.limit}`,
+        );
+        return {
+          xml: response.toString(),
+        };
+      }
+    }
 
     this.logger.log(`User : ${ProfileName}`);
     this.logger.log(`Message : ${Body}`);
 
-    const response = new twiml.MessagingResponse();
     const name = ProfileName || 'there';
     const incomingText = Body || '';
 

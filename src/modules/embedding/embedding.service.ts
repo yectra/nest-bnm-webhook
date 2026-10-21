@@ -4,11 +4,13 @@ import {
   Injectable,
   InternalServerErrorException,
   Logger,
+  Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 
 import { AZURE_OPENAI_CLIENT } from './azure-openai.provider';
+import { TokenBudgetService } from '../token-budget/token-budget.service';
 
 /**
  * Generates vector embeddings via Azure OpenAI `text-embedding-3-*` (Epic A / A2).
@@ -26,6 +28,7 @@ export class EmbeddingService {
   constructor(
     @Inject(AZURE_OPENAI_CLIENT) private readonly client: OpenAI,
     config: ConfigService,
+    @Optional() private readonly tokenBudgetService?: TokenBudgetService,
   ) {
     this.model = config.getOrThrow<string>('EMBEDDING_MODEL');
     this.logger.log(`[AI MODEL] stage=embedding model=${this.model}`);
@@ -56,12 +59,52 @@ export class EmbeddingService {
       throw new BadRequestException('Cannot embed empty text');
     }
 
+    const estimatedTokens = Math.max(
+      10,
+      Math.ceil(inputs.reduce((acc, t) => acc + t.length, 0) / 3),
+    );
+
+    let reservationId: string | undefined;
+    if (this.tokenBudgetService) {
+      const reservation = await this.tokenBudgetService.reserveTokens({
+        stage: 'embedding_generate',
+        process: 'embedding',
+        model: this.model,
+        modelEnv: 'EMBEDDING_MODEL',
+        estimatedTokens,
+      });
+
+      if (!reservation.allowed) {
+        throw new InternalServerErrorException(
+          'AI_TOKEN_BUDGET_EXHAUSTED: rolling 24-hour token limit reached',
+        );
+      }
+      reservationId = reservation.reservationId;
+    }
+
     try {
       const response = await this.client.embeddings.create({
         model: this.model,
         input: inputs,
         dimensions: this.dimensions,
       });
+
+      if (this.tokenBudgetService && reservationId) {
+        const usage = response?.usage;
+        const totalTokens =
+          usage?.total_tokens ?? usage?.prompt_tokens ?? estimatedTokens;
+
+        await this.tokenBudgetService.reconcileUsage({
+          reservationId,
+          actualUsage: {
+            inputTokens: totalTokens,
+            outputTokens: 0,
+            totalTokens,
+          },
+          success: true,
+        });
+      }
+
       const embeddings = response.data
         .sort((a, b) => a.index - b.index)
         .map((d) => d.embedding);
@@ -72,6 +115,18 @@ export class EmbeddingService {
       }
       return embeddings;
     } catch (error) {
+      if (this.tokenBudgetService && reservationId) {
+        await this.tokenBudgetService.reconcileUsage({
+          reservationId,
+          actualUsage: {
+            inputTokens: 0,
+            outputTokens: 0,
+            totalTokens: estimatedTokens,
+          },
+          success: false,
+          error,
+        });
+      }
       this.logger.error('Azure OpenAI embedding generation failed', error);
       throw new InternalServerErrorException('Embedding generation failed');
     }

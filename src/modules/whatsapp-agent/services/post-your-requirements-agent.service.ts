@@ -1,9 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { createDeepAgent } from 'deepagents';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { AgentModelService } from './agent-model.service';
 import { LangsmithTracingService } from './langsmith-tracing.service';
 import type { EventGridEvent } from '../../whatsapp/services/event-grid.service';
+import { TokenBudgetService } from '../../token-budget/token-budget.service';
 
 /**
  * System prompt for the PostYourRequirements agent.
@@ -50,6 +51,7 @@ export class PostYourRequirementsAgentService {
   constructor(
     private readonly agentModelService: AgentModelService,
     private readonly langsmithTracingService: LangsmithTracingService,
+    @Optional() private readonly tokenBudgetService?: TokenBudgetService,
   ) {}
 
   /**
@@ -91,6 +93,31 @@ export class PostYourRequirementsAgentService {
       },
     });
 
+    const estimatedTokens = Math.max(
+      400,
+      Math.ceil((POST_YOUR_REQUIREMENTS_SYSTEM_PROMPT.length + userMessage.length) / 3) + 600,
+    );
+
+    let reservationId: string | undefined;
+    if (this.tokenBudgetService) {
+      const reservation = await this.tokenBudgetService.reserveTokens({
+        eventId: event.id,
+        stage: 'post_your_requirements_agent',
+        process: 'whatsapp_agent',
+        model: model.getName(),
+        modelEnv: 'WHATSAPP_AGENT_LLM_MODEL',
+        estimatedTokens,
+      });
+
+      if (!reservation.allowed) {
+        this.logger.warn(
+          `AI_TOKEN_BUDGET_EXHAUSTED: rolling 24-hour token limit reached; event skipped for event ${event.id}`,
+        );
+        return NO_LLM_REPLY_PYR;
+      }
+      reservationId = reservation.reservationId;
+    }
+
     try {
       const agent = createDeepAgent({
         model,
@@ -108,12 +135,41 @@ export class PostYourRequirementsAgentService {
       const text =
         typeof last?.content === 'string' ? last.content.trim() : '';
 
+      if (this.tokenBudgetService && reservationId) {
+        const usage = (last as any)?.usage_metadata || (last as any)?.response_metadata?.tokenUsage;
+        const inputTokens = usage?.input_tokens ?? usage?.prompt_tokens ?? 0;
+        const outputTokens = usage?.output_tokens ?? usage?.completion_tokens ?? Math.ceil(text.length / 3);
+        const totalTokens = usage?.total_tokens ?? (inputTokens + outputTokens);
+
+        await this.tokenBudgetService.reconcileUsage({
+          reservationId,
+          actualUsage: {
+            inputTokens,
+            outputTokens,
+            totalTokens: totalTokens > 0 ? totalTokens : estimatedTokens,
+          },
+          success: true,
+        });
+      }
+
       this.logger.log(
         `[PostYourRequirements] Agent completed for event ${event.id}. Reply length: ${text.length}`,
       );
 
       return text || NO_LLM_REPLY_PYR;
     } catch (error) {
+      if (this.tokenBudgetService && reservationId) {
+        await this.tokenBudgetService.reconcileUsage({
+          reservationId,
+          actualUsage: {
+            inputTokens: 0,
+            outputTokens: 0,
+            totalTokens: estimatedTokens,
+          },
+          success: false,
+          error,
+        });
+      }
       this.logger.warn(
         `[PostYourRequirements] Agent failed for event ${event.id}, falling back: ${String(error)}`,
       );
